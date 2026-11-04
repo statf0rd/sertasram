@@ -36,7 +36,7 @@ public final class MacScreenVideoCapture implements ScreenVideoCapture {
             if (e.getMessage() != null && e.getMessage().contains("already loaded")) {
                 return true;
             }
-            System.err.println("sertas: не удалось загрузить " + path + ": " + e.getMessage());
+            System.err.println("sertasram: не удалось загрузить " + path + ": " + e.getMessage());
             return false;
         }
     }

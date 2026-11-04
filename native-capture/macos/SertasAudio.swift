@@ -3,7 +3,7 @@ import ScreenCaptureKit
 import AVFoundation
 import CoreMedia
 
-// Нативный захват системного звука для sertas (Фаза B). Pull-модель: SCStream
+// Нативный захват системного звука для sertasram (Фаза B). Pull-модель: SCStream
 // пишет планарный Float32 в кольцевой буфер, Java тянет через nativeRead. Никаких
 // апколлов Swift→JVM — только запись в буфер и копирование в Java-массивы по запросу.
 

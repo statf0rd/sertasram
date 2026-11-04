@@ -4,12 +4,12 @@
 # (сервер/клиент на чистой Java; нативные jar'ы качаются под Windows).
 #
 #   ./scripts/package-windows.sh
-#   -> ~/Desktop/sertas-win.zip
+#   -> ~/Desktop/sertasram-win.zip
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-STAGE=/tmp/sertas-win
-OUT="${OUT:-$HOME/Desktop/sertas-win.zip}"
+STAGE=/tmp/sertasram-win
+OUT="${OUT:-$HOME/Desktop/sertasram-win.zip}"
 JFX=21.0.4
 WEBRTC=0.14.0
 JACKSON=2.17.2
@@ -69,17 +69,17 @@ JVM_EXTRA="${SERTAS_JVM_EXTRA:-}"  # доп. JVM-флаги (напр. -Dsertas.
 # SERTAS_DEMOAUDIO=off чтобы выключить. Без этого флага CallController.join
 # не создаёт audioEngine и звук демо вообще не инициализируется.
 DEMOAUDIO_ARG="-Dsertas.demoaudio=${SERTAS_DEMOAUDIO:-on}"
-cat > "$STAGE/Запустить sertas.bat" <<BAT
+cat > "$STAGE/Запустить sertasram.bat" <<BAT
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
-echo Запуск sertas... (первый старт может занять 10-20 секунд)
+echo Запуск sertasram... (первый старт может занять 10-20 секунд)
 "jre\\bin\\java.exe" -Dsertas.server="$SERVER_URL" $TURN_ARG $CAP_ARG $AUDIO_DLL_ARG $DEMOAUDIO_ARG $JVM_EXTRA -cp "lib\\*" dev.sertas.app.Launcher
 echo.
 echo ---- Если выше есть ошибка - пришлите скриншот этого окна. ----
 pause
 BAT
-perl -pi -e 's/\r?\n/\r\n/' "$STAGE/Запустить sertas.bat"
+perl -pi -e 's/\r?\n/\r\n/' "$STAGE/Запустить sertasram.bat"
 rm -f "$OUT"
-( cd /tmp && zip -q -r -X "$OUT" sertas-win )
+( cd /tmp && zip -q -r -X "$OUT" sertasram-win )
 echo "done -> $OUT ($(du -h "$OUT" | cut -f1))"

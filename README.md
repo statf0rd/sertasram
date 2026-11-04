@@ -1,4 +1,4 @@
-# sertas
+# sertasram
 
 Кроссплатформенное десктоп-приложение для голосовых и видео-звонков с
 демонстрацией экрана — аналог Discord. До 4 участников в P2P-меше на WebRTC.
@@ -9,6 +9,12 @@
 Документы: [дизайн](docs/superpowers/specs/2026-06-24-discord-analog-voice-app-design.md),
 [план Фазы 0](docs/superpowers/plans/2026-06-24-phase-0-signaling-and-foundations.md),
 [деплой сервера](DEPLOY.md).
+
+> Проект переименован из `sertas` в `sertasram`. Внутренние имена намеренно
+> оставлены прежними, чтобы не ломать совместимость: Java-пакеты `dev.sertas.*`
+> (на них завязаны JNI-символы нативных библиотек), bundle id `dev.sertas.app`,
+> системные свойства `-Dsertas.*`, переменные `SERTAS_*`, каталог `~/.sertas/`,
+> имена `sertas_*.dll`/`libsertas_audio.dylib` и серверный юнит `sertas-signaling`.
 
 ## Стек
 

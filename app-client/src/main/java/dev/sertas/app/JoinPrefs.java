@@ -41,7 +41,7 @@ public final class JoinPrefs {
         try {
             Files.createDirectories(FILE.getParent());
             try (OutputStream out = Files.newOutputStream(FILE)) {
-                p.store(out, "sertas join prefs");
+                p.store(out, "sertasram join prefs");
             }
         } catch (IOException ignored) {
             // не критично, если не удалось сохранить

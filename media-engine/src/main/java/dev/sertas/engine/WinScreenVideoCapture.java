@@ -34,7 +34,7 @@ public final class WinScreenVideoCapture implements ScreenVideoCapture {
             System.load(path);
             return true;
         } catch (UnsatisfiedLinkError e) {
-            System.err.println("sertas: не удалось загрузить " + path + ": " + e.getMessage());
+            System.err.println("sertasram: не удалось загрузить " + path + ": " + e.getMessage());
             return false;
         }
     }

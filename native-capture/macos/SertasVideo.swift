@@ -3,7 +3,7 @@ import ScreenCaptureKit
 import CoreMedia
 import CoreVideo
 
-// Нативный захват экрана (видео) для sertas через ScreenCaptureKit. Pull-модель:
+// Нативный захват экрана (видео) для sertasram через ScreenCaptureKit. Pull-модель:
 // SCStream держит ПОСЛЕДНИЙ NV12-кадр; Java тянет через nativeRead и конвертит
 // NV12 -> I420 на своей стороне (webrtc-java VideoBufferConverter). Высокий FPS,
 // zero-copy IOSurface на стороне ОС. Никаких апколлов Swift -> JVM.

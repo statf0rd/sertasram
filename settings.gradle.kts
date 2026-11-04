@@ -5,6 +5,6 @@ pluginManagement {
     }
 }
 
-rootProject.name = "sertas"
+rootProject.name = "sertasram"
 
 include("protocol", "signaling-server", "signaling-client", "media", "media-engine", "app-client")

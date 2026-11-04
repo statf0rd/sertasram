@@ -18,7 +18,7 @@ public class SertasApp extends Application {
     @Override
     public void start(Stage stage) {
         this.stage = stage;
-        stage.setTitle("sertas");
+        stage.setTitle("sertasram");
         showJoin();
         stage.show();
     }
