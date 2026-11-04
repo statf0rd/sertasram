@@ -1,0 +1,107 @@
+sertasram
+Copyright (c) 2026 Stanislav Rushkevich. Все права защищены. All rights reserved.
+
+================================================================================
+ЛИЦЕНЗИЯ — ВСЕ ПРАВА ЗАЩИЩЕНЫ
+================================================================================
+
+Исходный код, документация, скрипты сборки и другие материалы этого
+репозитория (далее — «Программа») являются объектом авторского права. Они
+охраняются частью четвёртой Гражданского кодекса Российской Федерации
+(далее — ГК РФ) и международными договорами, в том числе Бернской конвенцией.
+
+1. Программа опубликована только для ознакомления. Публикация исходного кода
+   не означает передачу каких-либо прав на Программу.
+
+2. Без предварительного письменного разрешения правообладателя запрещается:
+   а) копировать, воспроизводить и распространять Программу или её части,
+      в том числе в изменённом виде;
+   б) перерабатывать Программу и создавать производные работы на её основе;
+   в) использовать Программу или её части в составе других программ,
+      продуктов и сервисов, в том числе коммерческих;
+   г) выдавать Программу или её части за собственную работу, в том числе в
+      учебных, курсовых, дипломных, выпускных квалификационных и конкурсных
+      работах (право авторства, статья 1265 ГК РФ);
+   д) удалять или изменять сведения об авторе и правообладателе, а также
+      текст этой лицензии.
+
+3. Разрешается:
+   а) просматривать исходный код на GitHub;
+   б) делать форк в пределах GitHub в том объёме, который предусмотрен
+      Условиями использования GitHub (GitHub Terms of Service). Форк не даёт
+      никаких прав сверх перечисленных в этом пункте;
+   в) цитировать небольшие фрагменты в информационных, научных и учебных
+      целях с указанием автора и ссылкой на репозиторий — в пределах,
+      установленных статьёй 1274 ГК РФ;
+   г) запускать сборки Программы, полученные непосредственно от
+      правообладателя.
+
+4. Сторонние компоненты, которые использует Программа (webrtc-java,
+   libwebrtc, JavaFX, Javalin, Jackson, SLF4J и другие), распространяются на
+   условиях собственных лицензий. Эта лицензия на них не распространяется.
+
+5. Программа предоставляется «как есть», без каких-либо гарантий.
+   Правообладатель не отвечает за ущерб, возникший в связи с её
+   использованием.
+
+6. Нарушение этих условий влечёт ответственность, предусмотренную
+   законодательством, в том числе требования о пресечении нарушения и
+   выплате компенсации (статьи 1252 и 1301 ГК РФ), а также удаление
+   нарушающих копий по процедуре уведомления GitHub (DMCA).
+
+7. Запросы на разрешение направляйте правообладателю через GitHub:
+   https://github.com/statf0rd
+
+При расхождении русского и английского текстов приоритет имеет русский текст.
+
+================================================================================
+LICENSE — ALL RIGHTS RESERVED (English translation)
+================================================================================
+
+The source code, documentation, build scripts and other materials in this
+repository (the "Software") are protected by copyright under Part IV of the
+Civil Code of the Russian Federation (the "Civil Code") and international
+treaties, including the Berne Convention.
+
+1. The Software is published for viewing purposes only. Publication of the
+   source code does not transfer any rights in the Software.
+
+2. Without the prior written permission of the copyright holder, you may not:
+   a) copy, reproduce or distribute the Software or any part of it,
+      including in modified form;
+   b) modify the Software or create derivative works based on it;
+   c) use the Software or any part of it in other software, products or
+      services, whether commercial or not;
+   d) present the Software or any part of it as your own work, including in
+      academic, coursework, thesis or competition submissions (right of
+      authorship, Article 1265 of the Civil Code);
+   e) remove or alter the author and copyright notices or the text of this
+      license.
+
+3. You may:
+   a) view the source code on GitHub;
+   b) fork the repository within GitHub to the extent provided by the GitHub
+      Terms of Service. A fork grants no rights beyond those listed in this
+      section;
+   c) quote small excerpts for informational, scientific or educational
+      purposes with attribution and a link to the repository, within the
+      limits of Article 1274 of the Civil Code;
+   d) run builds of the Software obtained directly from the copyright holder.
+
+4. Third-party components used by the Software (webrtc-java, libwebrtc,
+   JavaFX, Javalin, Jackson, SLF4J and others) are distributed under their
+   own licenses. This license does not apply to them.
+
+5. The Software is provided "as is", without warranty of any kind. The
+   copyright holder is not liable for any damage arising from its use.
+
+6. Violation of these terms gives rise to liability under applicable law,
+   including claims to stop the infringement and pay compensation
+   (Articles 1252 and 1301 of the Civil Code), and removal of infringing
+   copies through GitHub's DMCA notice procedure.
+
+7. Send permission requests to the copyright holder via GitHub:
+   https://github.com/statf0rd
+
+In case of any discrepancy between the Russian and English texts, the Russian
+text prevails.
