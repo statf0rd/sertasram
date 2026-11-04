@@ -97,6 +97,11 @@ $TURN_LINE
 LAUNCH
 chmod +x "$APP/Contents/MacOS/sertasram"
 chmod +x "$RES/jre/Contents/Home/bin/java" 2>/dev/null || true
+# Лицензия sertasram и уведомления о сторонних компонентах (их требуют
+# лицензии webrtc-java/libwebrtc/JavaFX и др.). Кладём внутрь .app, а не
+# рядом: архив должен распаковываться ровно в sertasram.app (путь важен для TCC).
+cp "$ROOT/LICENSE" "$RES/LICENSE.txt"
+cp "$ROOT/THIRD-PARTY-NOTICES.txt" "$RES/THIRD-PARTY-NOTICES.txt"
 
 rm -f "$OUT"
 ( cd "$STAGE" && zip -q -r -y "$OUT" sertasram.app )

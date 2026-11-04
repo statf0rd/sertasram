@@ -80,6 +80,10 @@ echo ---- Если выше есть ошибка - пришлите скрин�
 pause
 BAT
 perl -pi -e 's/\r?\n/\r\n/' "$STAGE/Запустить sertasram.bat"
+# Лицензия sertasram и уведомления о сторонних компонентах (их требуют
+# лицензии webrtc-java/libwebrtc/FFmpeg/JavaFX и др.) — в корень бандла.
+cp "$ROOT/LICENSE" "$STAGE/LICENSE.txt"
+cp "$ROOT/THIRD-PARTY-NOTICES.txt" "$STAGE/THIRD-PARTY-NOTICES.txt"
 rm -f "$OUT"
 ( cd /tmp && zip -q -r -X "$OUT" sertasram-win )
 echo "done -> $OUT ($(du -h "$OUT" | cut -f1))"
