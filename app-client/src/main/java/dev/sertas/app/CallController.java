@@ -8,12 +8,14 @@ import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.sertas.app.ui.ParticipantModel;
 import dev.sertas.app.ui.VideoTile;
+import dev.sertas.engine.CameraSource;
 import dev.sertas.engine.MacSystemAudioCapture;
 import dev.sertas.engine.MeshCoordinator;
 import dev.sertas.engine.MeshListener;
 import dev.sertas.engine.RemoteAudioMixer;
 import dev.sertas.engine.ScreenAudioConnection;
 import dev.sertas.engine.ScreenCaptureSource;
+import dev.sertas.engine.StatsRecorder;
 import dev.sertas.engine.SystemAudioProvider;
 import dev.sertas.engine.SystemAudioTrack;
 import dev.sertas.engine.WebRtcEngine;
@@ -26,6 +28,7 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.layout.FlowPane;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -44,7 +47,7 @@ public final class CallController implements MeshListener {
     private final ObservableList<ParticipantModel> participants = FXCollections.observableArrayList();
     private final FlowPane videoPane = new FlowPane(12, 12);
     private final Map<String, ParticipantModel> byId = new HashMap<>();   // только FX-поток
-    private final Map<String, VideoTile> tiles = new HashMap<>();         // только FX-поток
+    private final Map<String, VideoTile> tiles = new HashMap<>();         // "peerId:метка" → плитка; только FX-поток
     private final Set<String> wiredGains = new HashSet<>();               // (peerId:Kind) с навешанным слушателем; FX-поток
 
     /** Музыкальный профиль Opus для секции трека звука демо. */
@@ -57,6 +60,8 @@ public final class CallController implements MeshListener {
     private MeshCoordinator mesh;
     private AudioTrack mic;
     private ScreenCaptureSource screen;
+    private CameraSource camera;
+    private StatsRecorder stats; // null - запись статистики выключена (-Dsertas.stats)
     private RemoteAudioMixer audioMixer;
     private ParticipantModel self;
 
@@ -69,6 +74,7 @@ public final class CallController implements MeshListener {
     private final Map<String, ScreenAudioConnection> screenAudioConns = new ConcurrentHashMap<>();
     private boolean micMuted = false;
     private volatile boolean sharing = false; // пишется из фонового потока старта показа
+    private volatile boolean cameraOn = false; // пишется из фонового потока старта камеры
     private boolean screenAudioOn = false;
     private volatile Consumer<String> errorSink; // получатель ошибок для UI (вызывается в FX-потоке)
 
@@ -90,7 +96,7 @@ public final class CallController implements MeshListener {
         this.errorSink = sink;
     }
 
-    /** Создать движок, треки (микрофон + экран) и войти в комнату. */
+    /** Создать движок, треки (микрофон, экран, камера) и войти в комнату. */
     public void join(String url, String room, String name) {
         // Диагностика окружения: demoaudio=off здесь + работающее видео + ноль
         // [demo]-строк = демо-звук выключен фича-флагом (упакованный лаунчер не
@@ -118,8 +124,14 @@ public final class CallController implements MeshListener {
         // Экранный трек согласуем сразу (но не захватываем) — чтобы потом начать
         // демонстрацию без повторной переговорки.
         screen = new ScreenCaptureSource();
-        VideoTrack screenTrack = engine.createVideoTrack("screen", screen.source());
+        VideoTrack screenTrack = engine.createVideoTrack(ScreenCaptureSource.LABEL, screen.source());
         mesh.addLocalTrack(screenTrack);
+
+        // Камера - отдельным видеотреком (своя m=video рядом с экраном), тоже
+        // согласуется сразу, а захват включается кнопкой.
+        camera = new CameraSource();
+        VideoTrack cameraTrack = engine.createVideoTrack(CameraSource.LABEL, camera.source());
+        mesh.addLocalTrack(cameraTrack);
 
         // Звук демо — отдельными соединениями (см. ScreenAudioConnection) на ДВУХ
         // отдельных движках: отдача — pushOnly (ADM kDummyAudio, без потока захвата),
@@ -140,7 +152,24 @@ public final class CallController implements MeshListener {
             participants.add(0, self);
         });
 
+        stats = StatsRecorder.startIfEnabled(this::statsTargets);
+
         mesh.start(url, room, name);
+    }
+
+    /** Соединения для записи статистики: основное и звук демо по каждому пиру. */
+    private List<StatsRecorder.Target> statsTargets() {
+        List<StatsRecorder.Target> targets = new ArrayList<>();
+        MeshCoordinator m = mesh;
+        if (m != null) {
+            m.sessions().forEach((peer, session) ->
+                    targets.add(new StatsRecorder.Target("main", peer, session)));
+        }
+        screenAudioConns.forEach((peer, conn) -> {
+            targets.add(new StatsRecorder.Target("demo-audio-out", peer, conn.outgoing()));
+            targets.add(new StatsRecorder.Target("demo-audio-in", peer, conn.incoming()));
+        });
+        return targets;
     }
 
     public void setMicMuted(boolean muted) {
@@ -195,6 +224,46 @@ public final class CallController implements MeshListener {
         return sharing;
     }
 
+    /**
+     * Включить камеру (первую найденную, режим около 720p30). Открытие устройства
+     * и на macOS запрос разрешения - в отдельном потоке, как и старт показа.
+     */
+    public void startCamera() {
+        CameraSource cam = camera;
+        if (cam == null) {
+            return;
+        }
+        new Thread(() -> {
+            try {
+                List<dev.onvoid.webrtc.media.video.VideoDevice> cameras = CameraSource.cameras();
+                if (cameras.isEmpty()) {
+                    onError(new IllegalStateException("камера не найдена (проверьте подключение и разрешение)"));
+                    return;
+                }
+                cam.start(cameras.get(0));
+                cameraOn = true;
+                System.err.println("[camera] захват запущен: " + cameras.get(0).getName());
+            } catch (RuntimeException e) {
+                onError(e);
+            }
+        }, "camera-start").start();
+    }
+
+    public void stopCamera() {
+        if (camera != null) {
+            try {
+                camera.stop();
+            } catch (RuntimeException ignored) {
+                // источник уже остановлен
+            }
+        }
+        cameraOn = false;
+    }
+
+    public boolean isCameraOn() {
+        return cameraOn;
+    }
+
     /** Включить передачу системного звука демонстрации зрителям. */
     public void startScreenAudio() {
         if (screenAudio == null) {
@@ -244,7 +313,14 @@ public final class CallController implements MeshListener {
     public void leave() {
         System.err.println("[life] leave STAGE=entry thread=" + Thread.currentThread().getName()
                 + " t=" + System.nanoTime());
+        // Статистику останавливаем первой: ни один опрос не должен застать
+        // соединения на середине закрытия.
+        if (stats != null) {
+            stats.close();
+            stats = null;
+        }
         stopScreenShare();
+        stopCamera();
         if (screenAudio != null) {
             screenAudio.stop();
             screenAudio = null;
@@ -268,6 +344,7 @@ public final class CallController implements MeshListener {
         }
         mic = null;
         screen = null;
+        camera = null;
         audioMixer = null;
         Platform.runLater(() -> {
             // ВАЖНО: этот runLater исполняется ПОСЛЕ синхронных mesh.stop()/engine.dispose()
@@ -305,13 +382,16 @@ public final class CallController implements MeshListener {
             if (m != null) {
                 participants.remove(m);
             }
-            VideoTile tile = tiles.remove(peerId);
-            if (tile != null) {
-                System.err.println("[life] onPeerLeft→dispose peer=" + peerId
+            tiles.entrySet().removeIf(e -> {
+                if (!e.getKey().startsWith(peerId + ":")) {
+                    return false;
+                }
+                System.err.println("[life] onPeerLeft→dispose tile=" + e.getKey()
                         + " thread=" + Thread.currentThread().getName() + " t=" + System.nanoTime());
-                videoPane.getChildren().remove(tile.node());
-                tile.dispose();
-            }
+                videoPane.getChildren().remove(e.getValue().node());
+                e.getValue().dispose();
+                return true;
+            });
             if (audioMixer != null) {
                 audioMixer.detach(peerId);
             }
@@ -362,7 +442,7 @@ public final class CallController implements MeshListener {
     }
 
     @Override
-    public void onRemoteTrack(String peerId, RTCRtpTransceiver transceiver) {
+    public void onRemoteTrack(String peerId, RTCRtpTransceiver transceiver, String label) {
         Platform.runLater(() -> {
             MediaStreamTrack track = transceiver.getReceiver().getTrack();
             if (track == null) {
@@ -378,15 +458,18 @@ public final class CallController implements MeshListener {
             if (!MediaStreamTrack.VIDEO_TRACK_KIND.equals(track.getKind())) {
                 return;
             }
-            VideoTile old = tiles.remove(peerId);
-            System.err.println("[life] onRemoteTrack peer=" + peerId + " kind=" + track.getKind()
+            // У пира два видеотрека - экран и камера: плитка на каждый. Старый клиент
+            // без метки в SDP шлёт только экран.
+            String key = peerId + ":" + (label != null ? label : ScreenCaptureSource.LABEL);
+            VideoTile old = tiles.remove(key);
+            System.err.println("[life] onRemoteTrack tile=" + key + " kind=" + track.getKind()
                     + " replacingOld=" + (old != null) + " t=" + System.nanoTime());
             if (old != null) {
                 videoPane.getChildren().remove(old.node());
                 old.dispose();
             }
             VideoTile tile = new VideoTile((VideoTrack) track);
-            tiles.put(peerId, tile);
+            tiles.put(key, tile);
             videoPane.getChildren().add(tile.node());
         });
     }

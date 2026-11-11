@@ -20,11 +20,12 @@ import javafx.scene.layout.VBox;
 
 import java.util.function.Function;
 
-/** Экран активного звонка: видео-плитки, список участников, mute, демонстрация, выход. */
+/** Экран активного звонка: видео-плитки, список участников, mute, камера, демонстрация, выход. */
 public final class CallView {
 
     private final BorderPane root = new BorderPane();
     private final ToggleButton mute = new ToggleButton("Микрофон вкл");
+    private final ToggleButton camera = new ToggleButton("Камера");
     private final ToggleButton share = new ToggleButton("Демонстрация");
     private final ToggleButton screenAudio = new ToggleButton("Звук демонстрации");
     private final Button leave = new Button("Выйти");
@@ -65,8 +66,8 @@ public final class CallView {
         // Кнопку звука демо показываем только если фича включена (-Dsertas.demoaudio=on);
         // по умолчанию выключена — на реальном ADM она роняет приложение (см. CallController).
         HBox controls = "on".equalsIgnoreCase(System.getProperty("sertas.demoaudio", "off"))
-                ? new HBox(10, mute, share, screenAudio, leave)
-                : new HBox(10, mute, share, leave);
+                ? new HBox(10, mute, camera, share, screenAudio, leave)
+                : new HBox(10, mute, camera, share, leave);
         controls.setPadding(new Insets(10));
 
         status.setWrapText(true);
@@ -126,6 +127,10 @@ public final class CallView {
 
     public ToggleButton muteButton() {
         return mute;
+    }
+
+    public ToggleButton cameraButton() {
+        return camera;
     }
 
     public ToggleButton shareButton() {

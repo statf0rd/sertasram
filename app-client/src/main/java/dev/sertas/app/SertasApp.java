@@ -57,6 +57,15 @@ public class SertasApp extends Application {
             controller.setMicMuted(muted);
             call.muteButton().setText(muted ? "Микрофон выкл" : "Микрофон вкл");
         });
+        call.cameraButton().selectedProperty().addListener((obs, was, on) -> {
+            if (on) {
+                controller.startCamera();
+                call.cameraButton().setText("Выключить камеру");
+            } else {
+                controller.stopCamera();
+                call.cameraButton().setText("Камера");
+            }
+        });
         call.shareButton().selectedProperty().addListener((obs, was, on) -> {
             if (on) {
                 controller.startScreenShare();
@@ -73,6 +82,9 @@ public class SertasApp extends Application {
             call.showError(msg);
             if (call.shareButton().isSelected() && !controller.isSharing()) {
                 call.shareButton().setSelected(false); // показ не стартовал — откат кнопки
+            }
+            if (call.cameraButton().isSelected() && !controller.isCameraOn()) {
+                call.cameraButton().setSelected(false); // камера не включилась — откат кнопки
             }
         });
         // Звук демо доступен только во время демонстрации экрана.

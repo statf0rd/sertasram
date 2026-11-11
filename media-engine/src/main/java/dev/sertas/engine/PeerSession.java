@@ -15,12 +15,15 @@ import dev.onvoid.webrtc.RTCRtpSendParameters;
 import dev.onvoid.webrtc.RTCRtpSender;
 import dev.onvoid.webrtc.RTCRtpTransceiver;
 import dev.onvoid.webrtc.RTCSdpType;
+import dev.onvoid.webrtc.RTCStatsCollectorCallback;
 import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.SetSessionDescriptionObserver;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
+import dev.sertas.media.SdpMsid;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.UnaryOperator;
 
 /**
@@ -60,6 +63,19 @@ public final class PeerSession {
     private final Object lock = new Object();
     private final List<RTCIceCandidate> pendingRemote = new ArrayList<>();
     private boolean remoteDescriptionSet = false;
+
+    /*
+     * Опросы со стороннего потока (статистика, метки треков) не должны попасть на
+     * уже освобождённый нативный peer-connection, иначе JVM падает. Поэтому такие
+     * вызовы считаются в inFlight, а close(), застав их, откладывает pc.close() до
+     * выхода последнего. Ждать их в close() нельзя: прокси libwebrtc выполняет
+     * вызов на сигнальном потоке, и если close() вызван с него же - взаимная
+     * блокировка. По той же причине колбэки соединения этот лок не берут.
+     */
+    private final Object closeLock = new Object();
+    private volatile boolean closed = false;
+    private int inFlight = 0;          // под closeLock
+    private boolean closeDeferred = false; // под closeLock
 
     public PeerSession(WebRtcEngine engine, Signals signals) {
         this(engine, signals, (List<RTCIceServer>) null);
@@ -117,8 +133,10 @@ public final class PeerSession {
             try {
                 RTCRtpSendParameters params = sender.getParameters();
                 if (params.encodings != null && !params.encodings.isEmpty()) {
+                    int maxBitrate = CameraSource.LABEL.equals(track.getId())
+                            ? CAMERA_MAX_BITRATE : VIDEO_MAX_BITRATE;
                     for (RTCRtpEncodingParameters enc : params.encodings) {
-                        enc.maxBitrate = VIDEO_MAX_BITRATE;
+                        enc.maxBitrate = maxBitrate;
                     }
                     sender.setParameters(params);
                 }
@@ -130,6 +148,83 @@ public final class PeerSession {
 
     private static final String STREAM_ID = "sertas";
     private static final int VIDEO_MAX_BITRATE = 5_000_000; // 5 Мбит/с для чёткой демонстрации
+    // Камере хватает 1,5 Мбит/с на 720p30; потолок не даёт ей отнять полосу у демонстрации.
+    private static final int CAMERA_MAX_BITRATE = 1_500_000;
+
+    /**
+     * Метки треков по mid из SDP: {@code remote=false} - свои (локальный SDP),
+     * {@code true} - треки другой стороны (удалённый SDP). Пусто, если SDP ещё
+     * нет или сессия закрыта.
+     */
+    public Map<String, String> trackLabels(boolean remote) {
+        if (!enter()) {
+            return Map.of();
+        }
+        try {
+            return labels(remote);
+        } finally {
+            exit();
+        }
+    }
+
+    /**
+     * Метка удалённого трека ({@code mic}, {@code screen}, {@code camera}...) по
+     * SDP другой стороны; {@code null}, если её нет (старый клиент, recvonly).
+     * Только из колбэка самого соединения ({@code onTrack}): там peer-connection
+     * гарантированно жив, и лок не берётся (см. {@link #closeLock}).
+     */
+    public String remoteTrackLabel(RTCRtpTransceiver transceiver) {
+        String mid = transceiver.getMid();
+        return mid == null || closed ? null : labels(true).get(mid);
+    }
+
+    private Map<String, String> labels(boolean remote) {
+        RTCSessionDescription d = remote ? pc.getRemoteDescription() : pc.getLocalDescription();
+        return d == null ? Map.of() : SdpMsid.trackIdsByMid(d.sdp);
+    }
+
+    /**
+     * Запросить статистику WebRTC (асинхронно, колбэк на нативном потоке).
+     *
+     * @return {@code false}, если сессия уже закрыта и запрос не отправлен
+     */
+    public boolean requestStats(RTCStatsCollectorCallback callback) {
+        if (!enter()) {
+            return false;
+        }
+        try {
+            pc.getStats(callback);
+            return true;
+        } finally {
+            exit();
+        }
+    }
+
+    /** Начать нативный вызов со стороннего потока; false - сессия закрыта. */
+    private boolean enter() {
+        synchronized (closeLock) {
+            if (closed) {
+                return false;
+            }
+            inFlight++;
+            return true;
+        }
+    }
+
+    /** Закончить нативный вызов; последний выходящий выполняет отложенный close. */
+    private void exit() {
+        boolean closeNow;
+        synchronized (closeLock) {
+            inFlight--;
+            closeNow = closeDeferred && inFlight == 0;
+            if (closeNow) {
+                closeDeferred = false;
+            }
+        }
+        if (closeNow) {
+            closeNative();
+        }
+    }
 
     /** Инициировать соединение: создать offer, установить локально, отдать наружу. */
     public void createOffer() {
@@ -178,6 +273,20 @@ public final class PeerSession {
     }
 
     public void close() {
+        synchronized (closeLock) {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            if (inFlight > 0) {
+                closeDeferred = true; // закроет exit() последнего опроса
+                return;
+            }
+        }
+        closeNative();
+    }
+
+    private void closeNative() {
         // Метка времени освобождения нативного PeerConnection (и его remote-треков).
         // Если t здесь МЕНЬШЕ, чем t у «removeSink CALLING» в VideoTile — это и есть
         // use-after-free (sink снимается с уже освобождённого трека).

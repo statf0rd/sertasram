@@ -30,7 +30,7 @@ dependencies {
 tasks.named<JavaExec>("run") {
     listOf("sertas.demoaudio", "sertas.mixer", "sertas.server", "sertas.turn",
         "sertas.screencap", "sertas.autojoin", "sertas.autoshare", "sertas.autodemoaudio",
-        "sertas.audiostats", "sertas.dumpframes").forEach { p ->
+        "sertas.audiostats", "sertas.dumpframes", "sertas.stats").forEach { p ->
         System.getProperty(p)?.let { systemProperty(p, it) }
     }
 }

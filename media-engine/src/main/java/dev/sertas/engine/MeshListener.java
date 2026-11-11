@@ -13,8 +13,13 @@ public interface MeshListener {
 
     default void onPeerState(String peerId, RTCPeerConnectionState state) {}
 
-    /** Удалённый трек (аудио/видео) от пира — для подписки на рендер/воспроизведение. */
-    default void onRemoteTrack(String peerId, RTCRtpTransceiver transceiver) {}
+    /**
+     * Удалённый трек (аудио/видео) от пира — для подписки на рендер/воспроизведение.
+     *
+     * @param label id трека у отправителя из его SDP ({@code mic}, {@code screen},
+     *              {@code camera}); {@code null}, если отправитель его не сообщил
+     */
+    default void onRemoteTrack(String peerId, RTCRtpTransceiver transceiver, String label) {}
 
     /**
      * Управляющий data-channel с пиром открыт.

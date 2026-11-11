@@ -20,6 +20,9 @@ import java.util.List;
  */
 public final class ScreenCaptureSource {
 
+    /** Id трека демонстрации экрана: по нему приёмник отличает экран от камеры. */
+    public static final String LABEL = "screen";
+
     /** Пресеты качества: компромисс FPS ↔ разрешение под полосу меша. */
     public enum Quality {
         SMOOTH(1280, 720, 60),     // плавность: ниже разрешение, выше FPS

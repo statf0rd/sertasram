@@ -77,6 +77,11 @@ public final class MeshCoordinator implements SignalingListener {
         return selfId;
     }
 
+    /** Снимок текущих peer-сессий (peerId → сессия) - для сбора статистики. */
+    public Map<String, PeerSession> sessions() {
+        return Map.copyOf(sessions);
+    }
+
     public void stop() {
         System.err.println("[life] mesh.stop thread=" + Thread.currentThread().getName()
                 + " t=" + System.nanoTime());
@@ -155,6 +160,7 @@ public final class MeshCoordinator implements SignalingListener {
     }
 
     private PeerSession newSession(String peerId) {
+        PeerSession[] self = new PeerSession[1]; // onTrack приходит уже после конструктора
         PeerSession session = new PeerSession(engine, new PeerSession.Signals() {
             @Override
             public void onLocalDescription(RTCSessionDescription d) {
@@ -182,7 +188,9 @@ public final class MeshCoordinator implements SignalingListener {
 
             @Override
             public void onTrack(RTCRtpTransceiver transceiver) {
-                listener.onRemoteTrack(peerId, transceiver);
+                // id удалённого трека тут не годится: у трансивера, созданного своим
+                // addTrack до переговорки, он случайный. Метку берём из SDP пира.
+                listener.onRemoteTrack(peerId, transceiver, self[0].remoteTrackLabel(transceiver));
             }
 
             @Override
@@ -190,6 +198,7 @@ public final class MeshCoordinator implements SignalingListener {
                 listener.onError(error);
             }
         }, iceServers, SCREEN_AUDIO_MUSIC);
+        self[0] = session;
         for (MediaStreamTrack track : localTracks) {
             session.addTrack(track);
         }

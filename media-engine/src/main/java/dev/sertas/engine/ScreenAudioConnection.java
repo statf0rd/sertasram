@@ -226,6 +226,16 @@ public final class ScreenAudioConnection {
         return new RTCIceCandidate(p[0], Integer.parseInt(p[1]), p[2]);
     }
 
+    /** Сессия отдачи звука демо ({@code null} у чистого зрителя) - для статистики. */
+    public PeerSession outgoing() {
+        return out;
+    }
+
+    /** Сессия приёма звука демо - для статистики. */
+    public PeerSession incoming() {
+        return in;
+    }
+
     public void close() {
         signaling.shutdownNow();
         if (out != null) {

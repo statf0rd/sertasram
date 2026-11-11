@@ -70,6 +70,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>sertasram</string>
   <key>NSMicrophoneUsageDescription</key><string>Голосовая связь в звонке</string>
+  <key>NSCameraUsageDescription</key><string>Видео с камеры в звонке</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
 </dict>
