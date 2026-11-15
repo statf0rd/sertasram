@@ -77,8 +77,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-TURN_LINE=""
-[ -n "$TURN_SPEC" ] && TURN_LINE="  -Dsertas.turn=\"$TURN_SPEC\" \\"
+# Флаг TURN - в той же строке, что и demoaudio: отдельная пустая строка без
+# TURN оборвала бы продолжение команды, и java запустилась бы без -cp.
+TURN_ARG=""
+[ -n "$TURN_SPEC" ] && TURN_ARG=" -Dsertas.turn=\"$TURN_SPEC\""
 # Звук демонстрации (ScreenCaptureKit) — включён в бандле по умолчанию;
 # SERTAS_DEMOAUDIO=off чтобы выключить. Без флага CallController.join не
 # создаёт ни audioEngine (отдача), ни demoPlayer (приём) — звук демо
@@ -92,8 +94,7 @@ mkdir -p "\$(dirname "\$LOG")"; [ -f "\$LOG" ] && mv -f "\$LOG" "\$LOG.prev"
 exec "\$HERE/jre/Contents/Home/bin/java" \\
   -Dsertas.server="$SERVER_URL" \\
   -Dsertas.audio.dylib="\$HERE/lib/libsertas_audio.dylib" \\
-  -Dsertas.demoaudio=$DEMOAUDIO \\
-$TURN_LINE
+  -Dsertas.demoaudio=$DEMOAUDIO$TURN_ARG \\
   -cp "\$HERE/lib/*" dev.sertas.app.Launcher >>"\$LOG" 2>&1
 LAUNCH
 chmod +x "$APP/Contents/MacOS/sertasram"
