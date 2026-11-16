@@ -41,6 +41,8 @@ public final class MeshCoordinator implements SignalingListener {
     private final SignalingClient signaling = new SignalingClient(this);
     private final Map<String, PeerSession> sessions = new ConcurrentHashMap<>();
     private final List<MediaStreamTrack> localTracks = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** id трека → потолок битрейта, заданный {@link #setMaxBitrate} (для новых сессий). */
+    private final Map<String, Integer> maxBitrates = new ConcurrentHashMap<>();
 
     /** Музыкальный профиль Opus навешивается только на секцию трека звука демо. */
     private static final UnaryOperator<String> SCREEN_AUDIO_MUSIC =
@@ -80,6 +82,15 @@ public final class MeshCoordinator implements SignalingListener {
     /** Снимок текущих peer-сессий (peerId → сессия) - для сбора статистики. */
     public Map<String, PeerSession> sessions() {
         return Map.copyOf(sessions);
+    }
+
+    /**
+     * Потолок битрейта отдачи локального трека во всех сессиях - и в текущих, и в
+     * тех, что появятся позже (новый участник получит тот же потолок).
+     */
+    public void setMaxBitrate(String trackId, int maxBitrate) {
+        maxBitrates.put(trackId, maxBitrate);
+        sessions.values().forEach(s -> s.setMaxBitrate(trackId, maxBitrate));
     }
 
     public void stop() {
@@ -202,6 +213,7 @@ public final class MeshCoordinator implements SignalingListener {
         for (MediaStreamTrack track : localTracks) {
             session.addTrack(track);
         }
+        maxBitrates.forEach(session::setMaxBitrate);
         return session;
     }
 

@@ -226,6 +226,16 @@ public final class ScreenAudioConnection {
         return new RTCIceCandidate(p[0], Integer.parseInt(p[1]), p[2]);
     }
 
+    /**
+     * Битрейт Opus отдачи звука демо (пресет качества). Применяется на потоке
+     * сигналинга соединения, по порядку с переговоркой; у зрителя без трека - no-op.
+     */
+    public void setMaxBitrate(int bitrate) {
+        if (out != null) {
+            async(() -> out.setMaxBitrate(SystemAudioTrack.LABEL, bitrate));
+        }
+    }
+
     /** Сессия отдачи звука демо ({@code null} у чистого зрителя) - для статистики. */
     public PeerSession outgoing() {
         return out;

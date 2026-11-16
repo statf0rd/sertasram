@@ -9,8 +9,8 @@ import java.util.Properties;
 
 /**
  * Сохраняет последние введённые на экране входа значения (адрес сервера, код
- * комнаты, имя) в {@code ~/.sertas/join.properties} и подставляет их при
- * следующем запуске.
+ * комнаты, имя), а также выбранные в звонке камеру и пресет качества, в
+ * {@code ~/.sertas/join.properties} и подставляет их при следующем запуске.
  */
 public final class JoinPrefs {
 
@@ -34,10 +34,26 @@ public final class JoinPrefs {
     }
 
     public static void save(String server, String room, String name) {
-        Properties p = new Properties();
+        Properties p = load(); // прочие ключи (камера, пресет) сохраняются
         p.setProperty("server", server == null ? "" : server);
         p.setProperty("room", room == null ? "" : room);
         p.setProperty("name", name == null ? "" : name);
+        store(p);
+    }
+
+    /** Сохранённое значение ({@code null} - нет). Ключи: {@code camera}, {@code quality}. */
+    public static String get(String key) {
+        return load().getProperty(key);
+    }
+
+    /** Запомнить одно значение, не трогая остальные. */
+    public static void put(String key, String value) {
+        Properties p = load();
+        p.setProperty(key, value == null ? "" : value);
+        store(p);
+    }
+
+    private static void store(Properties p) {
         try {
             Files.createDirectories(FILE.getParent());
             try (OutputStream out = Files.newOutputStream(FILE)) {

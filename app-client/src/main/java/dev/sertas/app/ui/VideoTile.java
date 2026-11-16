@@ -6,11 +6,14 @@ import dev.onvoid.webrtc.media.video.VideoFrame;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSink;
 import javafx.animation.AnimationTimer;
+import javafx.beans.property.ReadOnlyBooleanProperty;
+import javafx.beans.property.ReadOnlyBooleanWrapper;
+import javafx.beans.property.ReadOnlyDoubleProperty;
+import javafx.beans.property.ReadOnlyDoubleWrapper;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.PixelBuffer;
 import javafx.scene.image.PixelFormat;
 import javafx.scene.image.WritableImage;
-import javafx.scene.layout.Region;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -20,12 +23,15 @@ import java.nio.file.Path;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Плитка удалённого видео. Кадры приходят на нативном WebRTC-потоке: там их
- * конвертируем I420 → BGRA в общий direct-буфер; на FX-потоке через
- * {@link AnimationTimer} обновляем {@link PixelBuffer} (не чаще refresh).
- * Пока кадров нет (никто не демонстрирует) — плитка скрыта.
+ * Плитка видео (удалённого или своего превью). Кадры приходят на нативном
+ * WebRTC-потоке: там их конвертируем I420 → BGRA в общий direct-буфер; на
+ * FX-потоке через {@link AnimationTimer} обновляем {@link PixelBuffer} (не чаще
+ * refresh). Пока кадров нет (показ или камера выключены), {@link #activeProperty()}
+ * равно {@code false} и раскладка ({@link VideoGrid}) плитку не показывает.
  */
 public final class VideoTile {
+
+    private static final double DEFAULT_ASPECT = 16.0 / 9;
 
     private static final long HIDE_AFTER_NS = 2_000_000_000L;
     private static final long STATS_WINDOW_NS = 5_000_000_000L;
@@ -46,25 +52,28 @@ public final class VideoTile {
     private PixelBuffer<ByteBuffer> pixelBuffer;
     private volatile long lastFrameNs;
 
+    // Только FX-поток: есть ли свежие кадры и пропорции последнего кадра.
+    private final ReadOnlyBooleanWrapper active = new ReadOnlyBooleanWrapper(false);
+    private final ReadOnlyDoubleWrapper aspect = new ReadOnlyDoubleWrapper(DEFAULT_ASPECT);
+
     // Статистика приёма ([recv]) — читается/пишется только на нативном потоке кадров.
     private long statWindowStartNs;
     private int statFrames;
 
     public VideoTile(VideoTrack track) {
+        this(track, false);
+    }
+
+    /** @param mirror отразить по горизонтали (своё превью камеры, как в зеркале) */
+    public VideoTile(VideoTrack track, boolean mirror) {
         this.track = track;
         view.setPreserveRatio(true);
-        view.setManaged(false);
-        view.setVisible(false);
-        // Видео заполняет ширину контейнера (на весь доступный размер окна).
+        view.setSmooth(true);
+        // Ширину задаёт раскладка (VideoGrid.layoutChildren), высота - по пропорциям.
         view.setFitWidth(640);
-        view.parentProperty().addListener((obs, oldParent, parent) -> {
-            view.fitWidthProperty().unbind();
-            if (parent instanceof Region region) {
-                view.fitWidthProperty().bind(region.widthProperty().subtract(24));
-            } else {
-                view.setFitWidth(640);
-            }
-        });
+        if (mirror) {
+            view.setScaleX(-1);
+        }
         track.addSink(sink);
         timer = new AnimationTimer() {
             @Override
@@ -78,6 +87,24 @@ public final class VideoTile {
     /** Узел для размещения в сцене. */
     public ImageView node() {
         return view;
+    }
+
+    /** Есть свежие кадры (последний - не старше {@link #HIDE_AFTER_NS}). FX-поток. */
+    public ReadOnlyBooleanProperty activeProperty() {
+        return active.getReadOnlyProperty();
+    }
+
+    /** Ширина / высота последнего кадра (16:9, пока кадров не было). FX-поток. */
+    public ReadOnlyDoubleProperty aspectProperty() {
+        return aspect.getReadOnlyProperty();
+    }
+
+    /**
+     * Сразу скрыть плитку (источник остановлен), не дожидаясь паузы в
+     * {@link #HIDE_AFTER_NS}: иначе ещё 2 секунды висел бы застывший кадр.
+     */
+    public void clear() {
+        lastFrameNs = 0;
     }
 
     /** Нативный поток: конвертация кадра в BGRA. Package-private — вызывается тестом напрямую. */
@@ -175,6 +202,7 @@ public final class VideoTile {
             if (sizeChanged && buffer != null) {
                 pixelBuffer = new PixelBuffer<>(width, height, buffer, PixelFormat.getByteBgraPreInstance());
                 view.setImage(new WritableImage(pixelBuffer));
+                aspect.set((double) width / height);
                 sizeChanged = false;
                 dirty = false;
             } else if (dirty && pixelBuffer != null) {
@@ -184,9 +212,8 @@ public final class VideoTile {
         } finally {
             lock.unlock();
         }
-        boolean active = lastFrameNs != 0 && (System.nanoTime() - lastFrameNs) < HIDE_AFTER_NS;
-        view.setVisible(active);
-        view.setManaged(active);
+        long last = lastFrameNs;
+        active.set(last != 0 && (System.nanoTime() - last) < HIDE_AFTER_NS);
     }
 
     public void dispose() {

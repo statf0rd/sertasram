@@ -131,15 +131,8 @@ public final class PeerSession {
         RTCRtpSender sender = pc.addTrack(track, List.of(STREAM_ID));
         if (MediaStreamTrack.VIDEO_TRACK_KIND.equals(track.getKind())) {
             try {
-                RTCRtpSendParameters params = sender.getParameters();
-                if (params.encodings != null && !params.encodings.isEmpty()) {
-                    int maxBitrate = CameraSource.LABEL.equals(track.getId())
-                            ? CAMERA_MAX_BITRATE : VIDEO_MAX_BITRATE;
-                    for (RTCRtpEncodingParameters enc : params.encodings) {
-                        enc.maxBitrate = maxBitrate;
-                    }
-                    sender.setParameters(params);
-                }
+                applyMaxBitrate(sender, CameraSource.LABEL.equals(track.getId())
+                        ? CAMERA_MAX_BITRATE : VIDEO_MAX_BITRATE);
             } catch (RuntimeException ignored) {
                 // параметры можно будет применить после переговорки
             }
@@ -147,9 +140,69 @@ public final class PeerSession {
     }
 
     private static final String STREAM_ID = "sertas";
-    private static final int VIDEO_MAX_BITRATE = 5_000_000; // 5 Мбит/с для чёткой демонстрации
+    // Потолок видео экрана по умолчанию - из пресета BALANCED (5 Мбит/с); другой
+    // пресет меняет его через setMaxBitrate.
+    private static final int VIDEO_MAX_BITRATE = ScreenCaptureSource.Quality.DEFAULT.videoMaxBitrate();
     // Камере хватает 1,5 Мбит/с на 720p30; потолок не даёт ей отнять полосу у демонстрации.
     private static final int CAMERA_MAX_BITRATE = 1_500_000;
+
+    /**
+     * Потолок битрейта отдачи трека с id {@code trackId} (видео - потолок
+     * кодера; аудио - целевой битрейт Opus). Меняется на ходу, без переговорки.
+     *
+     * @return {@code false}, если такого трека нет или сессия закрыта
+     */
+    public boolean setMaxBitrate(String trackId, int maxBitrate) {
+        if (!enter()) {
+            return false;
+        }
+        try {
+            RTCRtpSender sender = senderOf(trackId);
+            return sender != null && applyMaxBitrate(sender, maxBitrate);
+        } finally {
+            exit();
+        }
+    }
+
+    /** Текущий потолок отдачи трека ({@code null} - не задан, нет трека или сессия закрыта). */
+    Integer maxBitrate(String trackId) {
+        if (!enter()) {
+            return null;
+        }
+        try {
+            RTCRtpSender sender = senderOf(trackId);
+            if (sender == null) {
+                return null;
+            }
+            RTCRtpSendParameters params = sender.getParameters();
+            return params.encodings == null || params.encodings.isEmpty()
+                    ? null : params.encodings.get(0).maxBitrate;
+        } finally {
+            exit();
+        }
+    }
+
+    private RTCRtpSender senderOf(String trackId) {
+        for (RTCRtpSender sender : pc.getSenders()) {
+            MediaStreamTrack track = sender.getTrack();
+            if (track != null && trackId.equals(track.getId())) {
+                return sender;
+            }
+        }
+        return null;
+    }
+
+    private static boolean applyMaxBitrate(RTCRtpSender sender, int maxBitrate) {
+        RTCRtpSendParameters params = sender.getParameters();
+        if (params.encodings == null || params.encodings.isEmpty()) {
+            return false;
+        }
+        for (RTCRtpEncodingParameters enc : params.encodings) {
+            enc.maxBitrate = maxBitrate;
+        }
+        sender.setParameters(params);
+        return true;
+    }
 
     /**
      * Метки треков по mid из SDP: {@code remote=false} - свои (локальный SDP),

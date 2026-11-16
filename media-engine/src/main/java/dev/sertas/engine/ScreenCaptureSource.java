@@ -23,20 +23,54 @@ public final class ScreenCaptureSource {
     /** Id трека демонстрации экрана: по нему приёмник отличает экран от камеры. */
     public static final String LABEL = "screen";
 
-    /** Пресеты качества: компромисс FPS ↔ разрешение под полосу меша. */
+    /**
+     * Пресеты качества демонстрации: разрешение и FPS захвата, потолок битрейта
+     * видео экрана и битрейт Opus для звука демонстрации. Порядок - по росту полосы.
+     * Значения стартовые, уточняются замерами (getStats в CSV).
+     */
     public enum Quality {
-        SMOOTH(1280, 720, 60),     // плавность: ниже разрешение, выше FPS
-        BALANCED(1920, 1080, 30),
-        CRISP(2560, 1440, 15);     // чёткость: выше разрешение, ниже FPS
+        ECONOMY(1280, 720, 30, 1_500_000, 96_000),    // слабая сеть
+        SMOOTH(1280, 720, 60, 4_000_000, 128_000),    // плавность: игры, видео
+        BALANCED(1920, 1080, 30, 5_000_000, 192_000), // по умолчанию
+        CRISP(2560, 1440, 15, 6_000_000, 256_000);    // чёткость: текст, код, слайды
+
+        /** Пресет по умолчанию; его битрейты совпадают с прежними константами. */
+        public static final Quality DEFAULT = BALANCED;
 
         final int maxWidth;
         final int maxHeight;
         final int fps;
+        private final int videoMaxBitrate;
+        private final int opusBitrate;
 
-        Quality(int maxWidth, int maxHeight, int fps) {
+        Quality(int maxWidth, int maxHeight, int fps, int videoMaxBitrate, int opusBitrate) {
             this.maxWidth = maxWidth;
             this.maxHeight = maxHeight;
             this.fps = fps;
+            this.videoMaxBitrate = videoMaxBitrate;
+            this.opusBitrate = opusBitrate;
+        }
+
+        public int maxWidth() {
+            return maxWidth;
+        }
+
+        public int maxHeight() {
+            return maxHeight;
+        }
+
+        public int fps() {
+            return fps;
+        }
+
+        /** Потолок битрейта видео экрана, бит/с. */
+        public int videoMaxBitrate() {
+            return videoMaxBitrate;
+        }
+
+        /** Битрейт Opus звука демонстрации, бит/с. */
+        public int opusBitrate() {
+            return opusBitrate;
         }
     }
 
@@ -47,7 +81,7 @@ public final class ScreenCaptureSource {
     private final CustomVideoSource custom;
     private final VideoDesktopSource builtin;
 
-    private Quality quality = Quality.BALANCED;
+    private Quality quality = Quality.DEFAULT;
 
     public ScreenCaptureSource() {
         nativeCap = pickNative();
@@ -99,6 +133,11 @@ public final class ScreenCaptureSource {
             builtin.setMaxFrameSize(quality.maxWidth, quality.maxHeight);
         }
         // Нативный захват берёт основной экран; разрешение/FPS применяются в start().
+    }
+
+    /** Пресет, выбранный последним {@link #select}. */
+    public Quality quality() {
+        return quality;
     }
 
     /** Источник для создания видео-трека (создаётся при входе в звонок). */

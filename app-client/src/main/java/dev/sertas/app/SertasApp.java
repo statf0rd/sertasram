@@ -1,11 +1,13 @@
 package dev.sertas.app;
 
+import dev.onvoid.webrtc.media.video.VideoDevice;
 import dev.sertas.app.ui.CallView;
 import dev.sertas.app.ui.JoinView;
 import javafx.animation.PauseTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.scene.Scene;
+import javafx.scene.control.ComboBox;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
@@ -66,6 +68,34 @@ public class SertasApp extends Application {
                 call.cameraButton().setText("Камера");
             }
         });
+        // Список камер: при входе и при каждом раскрытии (камеру могли подключить).
+        // Выбор во время работы камеры сразу переключает захват.
+        ComboBox<VideoDevice> cameras = call.cameraChoice();
+        boolean[] refreshing = {false}; // программная смена списка - не выбор пользователя
+        Runnable refreshCameras = () -> controller.refreshCameras(list -> {
+            VideoDevice keep = CallController.pickCamera(list,
+                    cameras.getValue() != null ? cameras.getValue() : controller.selectedCamera(),
+                    CallController.savedCameraName());
+            refreshing[0] = true;
+            try {
+                cameras.getItems().setAll(list);
+                cameras.setValue(keep);
+            } finally {
+                refreshing[0] = false;
+            }
+        });
+        refreshCameras.run();
+        cameras.setOnShowing(e -> refreshCameras.run());
+        cameras.valueProperty().addListener((obs, was, device) -> {
+            if (!refreshing[0]) {
+                controller.selectCamera(device);
+            }
+        });
+
+        // Пресет качества: меняет разрешение/FPS показа (идущий показ перезапускается),
+        // потолок видео и битрейт звука демонстрации.
+        call.qualityChoice().setValue(controller.quality());
+        call.qualityChoice().valueProperty().addListener((obs, was, q) -> controller.setQuality(q));
         call.shareButton().selectedProperty().addListener((obs, was, on) -> {
             if (on) {
                 controller.startScreenShare();

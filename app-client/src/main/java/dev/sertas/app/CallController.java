@@ -5,8 +5,11 @@ import dev.onvoid.webrtc.RTCPeerConnectionState;
 import dev.onvoid.webrtc.RTCRtpTransceiver;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
+import dev.onvoid.webrtc.media.video.VideoDevice;
 import dev.onvoid.webrtc.media.video.VideoTrack;
+import dev.onvoid.webrtc.media.video.desktop.DesktopSource;
 import dev.sertas.app.ui.ParticipantModel;
+import dev.sertas.app.ui.VideoGrid;
 import dev.sertas.app.ui.VideoTile;
 import dev.sertas.engine.CameraSource;
 import dev.sertas.engine.MacSystemAudioCapture;
@@ -15,6 +18,7 @@ import dev.sertas.engine.MeshListener;
 import dev.sertas.engine.RemoteAudioMixer;
 import dev.sertas.engine.ScreenAudioConnection;
 import dev.sertas.engine.ScreenCaptureSource;
+import dev.sertas.engine.ScreenCaptureSource.Quality;
 import dev.sertas.engine.StatsRecorder;
 import dev.sertas.engine.SystemAudioProvider;
 import dev.sertas.engine.SystemAudioTrack;
@@ -22,11 +26,12 @@ import dev.sertas.engine.WebRtcEngine;
 import dev.sertas.engine.WinSystemAudioCapture;
 import dev.sertas.media.OpusSdpMunger;
 import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
 import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.value.ObservableStringValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.geometry.Insets;
-import javafx.scene.layout.FlowPane;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -35,6 +40,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
@@ -44,10 +53,13 @@ import java.util.function.UnaryOperator;
  */
 public final class CallController implements MeshListener {
 
+    /** Ключ плитки своего превью камеры в {@link #videoGrid}. */
+    private static final String SELF_CAMERA = "self:" + CameraSource.LABEL;
+
     private final ObservableList<ParticipantModel> participants = FXCollections.observableArrayList();
-    private final FlowPane videoPane = new FlowPane(12, 12);
+    // Плитки "peerId:метка" (экран, камера) и своё превью; только FX-поток.
+    private final VideoGrid videoGrid = new VideoGrid();
     private final Map<String, ParticipantModel> byId = new HashMap<>();   // только FX-поток
-    private final Map<String, VideoTile> tiles = new HashMap<>();         // "peerId:метка" → плитка; только FX-поток
     private final Set<String> wiredGains = new HashSet<>();               // (peerId:Kind) с навешанным слушателем; FX-поток
 
     /** Музыкальный профиль Opus для секции трека звука демо. */
@@ -78,17 +90,24 @@ public final class CallController implements MeshListener {
     private boolean screenAudioOn = false;
     private volatile Consumer<String> errorSink; // получатель ошибок для UI (вызывается в FX-потоке)
 
-    public CallController() {
-        videoPane.setPadding(new Insets(12));
-    }
+    /*
+     * Старт/стоп показа и камеры, смена камеры и пресета - тяжёлая нативная
+     * работа (TCC, ScreenCaptureKit, открытие устройства), поэтому не на FX-потоке.
+     * Один последовательный поток на звонок: быстрые нажатия выполняются по
+     * порядку, и «стоп» не обгонит ещё идущий «старт».
+     */
+    private ExecutorService mediaOps;
+    private volatile Quality quality = savedQuality();
+    private volatile VideoDevice selectedCamera; // null - первая найденная (или сохранённая по имени)
+    private volatile long sharedScreenId;
 
     public ObservableList<ParticipantModel> participants() {
         return participants;
     }
 
-    /** Панель с видео-плитками удалённых участников. */
-    public FlowPane videoPane() {
-        return videoPane;
+    /** Раскладка видео: демонстрации, камеры участников и своё превью. */
+    public VideoGrid videoPane() {
+        return videoGrid;
     }
 
     /** Куда показывать ошибки (в т.ч. неудачный старт показа); вызывается в FX-потоке. */
@@ -107,6 +126,11 @@ public final class CallController implements MeshListener {
                 + " audio.dll=" + System.getProperty("sertas.audio.dll", "unset"));
         engine = new WebRtcEngine();
         mesh = new MeshCoordinator(engine, this);
+        mediaOps = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "media-ops");
+            t.setDaemon(true);
+            return t;
+        });
 
         // Per-источниковый микшер у слушателя ВЫКЛЮЧЕН по умолчанию: на реальном
         // железе кастомный setAudioSource заменяет штатный playout libwebrtc и не
@@ -132,6 +156,12 @@ public final class CallController implements MeshListener {
         camera = new CameraSource();
         VideoTrack cameraTrack = engine.createVideoTrack(CameraSource.LABEL, camera.source());
         mesh.addLocalTrack(cameraTrack);
+        // Своё превью камеры - зеркально; видно, пока идут кадры (камера включена).
+        videoGrid.put(SELF_CAMERA, new VideoTile(cameraTrack, true), VideoGrid.Kind.CAMERA,
+                new SimpleStringProperty("Вы"));
+
+        // Потолок видео экрана - из выбранного пресета (и для пиров, что придут позже).
+        mesh.setMaxBitrate(ScreenCaptureSource.LABEL, quality.videoMaxBitrate());
 
         // Звук демо — отдельными соединениями (см. ScreenAudioConnection) на ДВУХ
         // отдельных движках: отдача — pushOnly (ADM kDummyAudio, без потока захвата),
@@ -183,33 +213,52 @@ public final class CallController implements MeshListener {
         return micMuted;
     }
 
-    /**
-     * Начать демонстрацию экрана (основной экран). Захват/энумерация экранов —
-     * тяжёлая нативная работа (TCC, ScreenCaptureKit), поэтому в ОТДЕЛЬНОМ потоке:
-     * иначе FX-поток блокируется и UI «лагает» при нажатии «Демонстрация».
-     */
+    /** Выполнить на потоке медиа-операций звонка; вне звонка - ничего. */
+    private void onMediaThread(String what, Runnable task) {
+        ExecutorService ops = mediaOps;
+        if (ops == null) {
+            return;
+        }
+        try {
+            ops.execute(() -> {
+                try {
+                    task.run();
+                } catch (RuntimeException e) {
+                    System.err.println("[media] " + what + " не удалось: " + e);
+                    onError(e);
+                }
+            });
+        } catch (RejectedExecutionException ignored) {
+            // звонок уже завершается
+        }
+    }
+
+    /** Начать демонстрацию основного экрана с выбранным пресетом качества. */
     public void startScreenShare() {
         ScreenCaptureSource src = screen;
         if (src == null) {
             return;
         }
-        new Thread(() -> {
-            try {
-                List<dev.onvoid.webrtc.media.video.desktop.DesktopSource> screens = ScreenCaptureSource.screens();
-                if (screens.isEmpty()) {
-                    onError(new IllegalStateException("нет доступных экранов (проверьте разрешение)"));
-                    return;
-                }
-                src.select(screens.get(0).id, ScreenCaptureSource.Quality.BALANCED);
-                src.start();
-                sharing = true;
-            } catch (RuntimeException e) {
-                onError(e);
+        onMediaThread("старт показа", () -> {
+            List<DesktopSource> screens = ScreenCaptureSource.screens();
+            if (screens.isEmpty()) {
+                onError(new IllegalStateException("нет доступных экранов (проверьте разрешение)"));
+                return;
             }
-        }, "screen-share-start").start();
+            Quality q = quality;
+            sharedScreenId = screens.get(0).id;
+            src.select(sharedScreenId, q);
+            src.start();
+            sharing = true;
+            System.err.println("[screen] показ запущен: " + q);
+        });
     }
 
     public void stopScreenShare() {
+        onMediaThread("стоп показа", this::stopScreenNow);
+    }
+
+    private void stopScreenNow() {
         if (screen != null) {
             try {
                 screen.stop();
@@ -224,32 +273,138 @@ public final class CallController implements MeshListener {
         return sharing;
     }
 
+    /** Выбранный пресет качества демонстрации. */
+    public Quality quality() {
+        return quality;
+    }
+
     /**
-     * Включить камеру (первую найденную, режим около 720p30). Открытие устройства
-     * и на macOS запрос разрешения - в отдельном потоке, как и старт показа.
+     * Сменить пресет: потолок видео экрана и битрейт Opus звука демо меняются
+     * сразу (без переговорки), а идущий показ перезапускается с новым
+     * разрешением и FPS. Выбор запоминается.
+     */
+    public void setQuality(Quality q) {
+        if (q == null || q == quality) {
+            return;
+        }
+        quality = q;
+        JoinPrefs.put("quality", q.name());
+        onMediaThread("смена пресета", () -> {
+            MeshCoordinator m = mesh;
+            if (m != null) {
+                m.setMaxBitrate(ScreenCaptureSource.LABEL, q.videoMaxBitrate());
+            }
+            screenAudioConns.values().forEach(c -> c.setMaxBitrate(q.opusBitrate()));
+            ScreenCaptureSource src = screen;
+            if (sharing && src != null) {
+                src.stop();
+                src.select(sharedScreenId, q);
+                src.start();
+            }
+            System.err.println("[screen] пресет " + q + (sharing ? " (показ перезапущен)" : ""));
+        });
+    }
+
+    private static Quality savedQuality() {
+        String saved = JoinPrefs.get("quality");
+        for (Quality q : Quality.values()) {
+            if (q.name().equals(saved)) {
+                return q;
+            }
+        }
+        return Quality.DEFAULT;
+    }
+
+    /**
+     * Список камер - для выбора в UI. Перечисление нативное, поэтому на потоке
+     * медиа-операций; результат отдаётся в FX-поток.
+     */
+    public void refreshCameras(Consumer<List<VideoDevice>> onFx) {
+        onMediaThread("список камер", () -> {
+            List<VideoDevice> cameras = List.copyOf(CameraSource.cameras());
+            Platform.runLater(() -> onFx.accept(cameras));
+        });
+    }
+
+    /** Камера, с которой будет (или идёт) захват: выбранная, сохранённая по имени или первая. */
+    public static VideoDevice pickCamera(List<VideoDevice> cameras, VideoDevice selected, String savedName) {
+        if (cameras.isEmpty()) {
+            return null;
+        }
+        if (selected != null && cameras.contains(selected)) {
+            return selected;
+        }
+        if (savedName != null) {
+            for (VideoDevice d : cameras) {
+                if (savedName.equals(d.getName())) {
+                    return d;
+                }
+            }
+        }
+        return cameras.get(0);
+    }
+
+    /** Выбранная камера ({@code null} - не выбрана, возьмётся сохранённая или первая). */
+    public VideoDevice selectedCamera() {
+        return selectedCamera;
+    }
+
+    /** Сохранённое имя камеры ({@code null} - не выбиралась). */
+    public static String savedCameraName() {
+        return JoinPrefs.get("camera");
+    }
+
+    /** Выбрать камеру; если камера включена - переключить захват на неё. Выбор запоминается. */
+    public void selectCamera(VideoDevice device) {
+        if (device == null || device.equals(selectedCamera)) {
+            return;
+        }
+        selectedCamera = device;
+        JoinPrefs.put("camera", device.getName());
+        CameraSource cam = camera;
+        if (cameraOn && cam != null) {
+            onMediaThread("смена камеры", () -> {
+                cam.start(device); // остановит текущую и откроет новую
+                System.err.println("[camera] переключено на: " + device.getName());
+            });
+        }
+    }
+
+    /**
+     * Включить камеру (выбранную, иначе сохранённую или первую, режим около
+     * 720p30). Открытие устройства и на macOS запрос разрешения - не на FX-потоке.
      */
     public void startCamera() {
         CameraSource cam = camera;
         if (cam == null) {
             return;
         }
-        new Thread(() -> {
-            try {
-                List<dev.onvoid.webrtc.media.video.VideoDevice> cameras = CameraSource.cameras();
-                if (cameras.isEmpty()) {
-                    onError(new IllegalStateException("камера не найдена (проверьте подключение и разрешение)"));
-                    return;
-                }
-                cam.start(cameras.get(0));
-                cameraOn = true;
-                System.err.println("[camera] захват запущен: " + cameras.get(0).getName());
-            } catch (RuntimeException e) {
-                onError(e);
+        onMediaThread("старт камеры", () -> {
+            VideoDevice device = pickCamera(CameraSource.cameras(), selectedCamera, savedCameraName());
+            if (device == null) {
+                onError(new IllegalStateException("камера не найдена (проверьте подключение и разрешение)"));
+                return;
             }
-        }, "camera-start").start();
+            cam.start(device);
+            cameraOn = true;
+            System.err.println("[camera] захват запущен: " + device.getName());
+        });
     }
 
     public void stopCamera() {
+        onMediaThread("стоп камеры", () -> {
+            stopCameraNow();
+            // Убрать превью сразу, а не через 2 секунды застывшего кадра.
+            Platform.runLater(() -> {
+                VideoTile self = videoGrid.tile(SELF_CAMERA);
+                if (self != null) {
+                    self.clear();
+                }
+            });
+        });
+    }
+
+    private void stopCameraNow() {
         if (camera != null) {
             try {
                 camera.stop();
@@ -319,8 +474,23 @@ public final class CallController implements MeshListener {
             stats.close();
             stats = null;
         }
-        stopScreenShare();
-        stopCamera();
+        // Медиа-операции: дождаться идущей (старт камеры/показа) и отменить
+        // остальные, дальше остановка - синхронно, до освобождения движка.
+        ExecutorService ops = mediaOps;
+        mediaOps = null;
+        if (ops != null) {
+            ops.shutdownNow();
+            try {
+                ops.awaitTermination(3, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        // Своё превью висит sink'ом на локальном треке камеры: снять его, пока
+        // движок жив (removeSink идёт через его потоки).
+        videoGrid.remove(SELF_CAMERA);
+        stopScreenNow();
+        stopCameraNow();
         if (screenAudio != null) {
             screenAudio.stop();
             screenAudio = null;
@@ -349,11 +519,9 @@ public final class CallController implements MeshListener {
         Platform.runLater(() -> {
             // ВАЖНО: этот runLater исполняется ПОСЛЕ синхронных mesh.stop()/engine.dispose()
             // выше (leave() сам на FX-потоке) — нативные треки уже освобождены здесь.
-            System.err.println("[life] leave STAGE=tiles.dispose-deferred tiles=" + tiles.size()
+            System.err.println("[life] leave STAGE=tiles.dispose-deferred tiles=" + videoGrid.size()
                     + " t=" + System.nanoTime());
-            tiles.values().forEach(VideoTile::dispose);
-            tiles.clear();
-            videoPane.getChildren().clear();
+            videoGrid.clear();
             participants.clear();
             byId.clear();
             wiredGains.clear();
@@ -382,16 +550,9 @@ public final class CallController implements MeshListener {
             if (m != null) {
                 participants.remove(m);
             }
-            tiles.entrySet().removeIf(e -> {
-                if (!e.getKey().startsWith(peerId + ":")) {
-                    return false;
-                }
-                System.err.println("[life] onPeerLeft→dispose tile=" + e.getKey()
-                        + " thread=" + Thread.currentThread().getName() + " t=" + System.nanoTime());
-                videoPane.getChildren().remove(e.getValue().node());
-                e.getValue().dispose();
-                return true;
-            });
+            System.err.println("[life] onPeerLeft→dispose tiles peer=" + peerId
+                    + " thread=" + Thread.currentThread().getName() + " t=" + System.nanoTime());
+            videoGrid.removeByPrefix(peerId + ":");
             if (audioMixer != null) {
                 audioMixer.detach(peerId);
             }
@@ -423,6 +584,7 @@ public final class CallController implements MeshListener {
         ScreenAudioConnection conn = new ScreenAudioConnection(
                 audioSendEngine, engine, channel, screenAudio.track(),
                 t -> onRemoteScreenAudio(peerId, t), SCREEN_AUDIO_MUSIC);
+        conn.setMaxBitrate(quality.opusBitrate()); // битрейт Opus - из пресета
         ScreenAudioConnection old = screenAudioConns.put(peerId, conn);
         if (old != null) {
             old.close();
@@ -460,18 +622,24 @@ public final class CallController implements MeshListener {
             }
             // У пира два видеотрека - экран и камера: плитка на каждый. Старый клиент
             // без метки в SDP шлёт только экран.
-            String key = peerId + ":" + (label != null ? label : ScreenCaptureSource.LABEL);
-            VideoTile old = tiles.remove(key);
+            String trackLabel = label != null ? label : ScreenCaptureSource.LABEL;
+            String key = peerId + ":" + trackLabel;
+            boolean isCamera = CameraSource.LABEL.equals(trackLabel);
             System.err.println("[life] onRemoteTrack tile=" + key + " kind=" + track.getKind()
-                    + " replacingOld=" + (old != null) + " t=" + System.nanoTime());
-            if (old != null) {
-                videoPane.getChildren().remove(old.node());
-                old.dispose();
-            }
-            VideoTile tile = new VideoTile((VideoTrack) track);
-            tiles.put(key, tile);
-            videoPane.getChildren().add(tile.node());
+                    + " replacingOld=" + (videoGrid.tile(key) != null) + " t=" + System.nanoTime());
+            videoGrid.put(key, new VideoTile((VideoTrack) track),
+                    isCamera ? VideoGrid.Kind.CAMERA : VideoGrid.Kind.SCREEN,
+                    caption(peerId, isCamera));
         });
+    }
+
+    /** Подпись плитки: имя участника (следит за переименованием), у экрана - с пометкой. */
+    private ObservableStringValue caption(String peerId, boolean camera) {
+        ParticipantModel m = byId.get(peerId);
+        if (m == null) {
+            return new SimpleStringProperty(camera ? peerId : peerId + " - экран");
+        }
+        return camera ? m.nameProperty() : Bindings.concat(m.nameProperty(), " - экран");
     }
 
     /**
