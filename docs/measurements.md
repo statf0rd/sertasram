@@ -74,10 +74,10 @@
 В sertasram FPS можно сверить со статистикой WebRTC: у получателя строки `in` / `video` / `screen`, столбец `fps`. Статистика включается так:
 
 ```bash
-SERTAS_STATS=on путь/к/sertasram.app/Contents/MacOS/sertasram
+SERTAS_STATS=on /Applications/sertasram.app/Contents/MacOS/sertasram
 ```
 
-На Windows: `set SERTAS_STATS=on`, затем запуск `Запустить sertasram.bat` из того же окна. Файл появится в `~/.sertas/stats/` (на Windows - `%USERPROFILE%\.sertas\stats\`).
+На Windows: `set SERTAS_STATS=on`, затем запуск `Запустить sertasram.bat` из того же окна. Если приложение поставлено установщиком, этот файл лежит в `%LOCALAPPDATA%\Programs\sertasram`. Файл статистики появится в `~/.sertas/stats/` (на Windows - `%USERPROFILE%\.sertas\stats\`).
 
 ## Таблица результатов
 

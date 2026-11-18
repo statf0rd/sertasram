@@ -1,0 +1,89 @@
+name: windows-installer
+
+# Собирает установщик Windows (Inno Setup) из zip-бандла релиза, проверяет
+# тихую установку, запуск и удаление и прикладывает setup.exe к тому же релизу.
+# Запускается сам после публикации релиза (scripts/release.sh) или вручную с
+# тегом. Сам zip собирается локально скриптом scripts/package-windows.sh.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег релиза, например v0.3.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Скачать Windows-бандл из релиза
+        shell: pwsh
+        run: |
+          gh release download $env:TAG --repo $env:GITHUB_REPOSITORY --pattern 'sertasram-windows-x64.zip' --dir dist
+          Expand-Archive dist/sertasram-windows-x64.zip -DestinationPath dist/bundle
+
+      - name: Inno Setup 6.3+
+        shell: pwsh
+        run: choco upgrade innosetup -y --no-progress
+
+      - name: Собрать установщик
+        shell: pwsh
+        run: |
+          $ver = $env:TAG.TrimStart('v')
+          $src = (Resolve-Path dist/bundle/sertasram-win).Path
+          # LICENSE.txt с BOM: без него мастер покажет кириллицу кракозябрами
+          $lic = Join-Path $src 'LICENSE.txt'
+          $text = [IO.File]::ReadAllText($lic, [Text.Encoding]::UTF8)
+          [IO.File]::WriteAllText($lic, $text, (New-Object Text.UTF8Encoding $true))
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$ver" "/DSourceDir=$src" "/O$((Resolve-Path dist).Path)" installer/windows/sertasram.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Проверка - тихая установка, запуск, удаление
+        shell: pwsh
+        run: |
+          $setup = (Resolve-Path dist/sertasram-windows-x64-setup.exe).Path
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "установщик завершился с кодом $($p.ExitCode)" }
+
+          $app = Join-Path $env:LOCALAPPDATA 'Programs\sertasram'
+          $lnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\sertasram.lnk'
+          foreach ($f in @("$app\jre\bin\javaw.exe", "$app\lib\sertas_capture.dll", "$app\lib\sertas_audio.dll", $lnk)) {
+            if (-not (Test-Path $f)) { throw "нет $f" }
+          }
+
+          # Запуск через ярлык из меню Пуск: те же параметры, что у пользователя
+          Start-Process $lnk
+          Start-Sleep -Seconds 25
+          $log = Join-Path $env:LOCALAPPDATA 'sertasram\sertasram.log'
+          if (Test-Path $log) { Get-Content $log } else { Write-Host 'лог не создан' }
+          $proc = Get-Process javaw -ErrorAction SilentlyContinue
+          if (-not $proc) { throw 'приложение закрылось в первые 25 секунд' }
+          if ((Test-Path $log) -and (Select-String -Path $log -Pattern 'Exception' -Quiet)) { throw 'в логе есть исключение' }
+          $proc | Stop-Process -Force
+          Start-Sleep -Seconds 2
+
+          # Деинсталлятор перезапускает себя из TEMP, поэтому ждём удаления файлов
+          Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES' -Wait
+          for ($i = 0; $i -lt 30 -and (Test-Path "$app\lib"); $i++) { Start-Sleep -Seconds 1 }
+          if (Test-Path "$app\lib") { throw 'после удаления остались файлы' }
+          if (Test-Path $lnk) { throw 'после удаления остался ярлык' }
+
+      - name: Приложить к релизу
+        shell: pwsh
+        run: gh release upload $env:TAG dist/sertasram-windows-x64-setup.exe --clobber --repo $env:GITHUB_REPOSITORY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sertasram-windows-x64-setup
+          path: dist/sertasram-windows-x64-setup.exe

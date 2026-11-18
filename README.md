@@ -33,6 +33,24 @@ Gradle не нужно).
 | `media-engine` | webrtc-java: движок, peer-сессии, меш, источники экрана/камеры |
 | `app-client` | JavaFX-приложение |
 
+## Установка
+
+Готовые сборки - в [релизах](https://github.com/statf0rd/sertasram/releases), Java
+уже внутри.
+
+- **Windows:** `sertasram-windows-x64-setup.exe` ставит приложение для текущего
+  пользователя, без прав администратора, в `%LOCALAPPDATA%\Programs\sertasram`,
+  с ярлыком в меню «Пуск». Если SmartScreen блокирует запуск: «Подробнее» -
+  «Выполнить в любом случае». Лог - `%LOCALAPPDATA%\sertasram\sertasram.log`.
+  Без установки - `sertasram-windows-x64.zip` и `Запустить sertasram.bat`.
+- **macOS:** `sertasram-macos-arm64.dmg` (Apple Silicon) или
+  `sertasram-macos-x64.dmg` (Intel). Перетащить `sertasram` в «Программы» и один
+  раз снять карантин: `xattr -cr /Applications/sertasram.app`. Лог -
+  `~/Library/Logs/sertasram.log`.
+
+Сборки не подписаны, отсюда предупреждения при первом запуске. Адрес сервера в
+них не вшит: адрес с токеном вводится в поле «Сервер» и запоминается.
+
 ## Запуск
 
 ```bash
@@ -81,7 +99,7 @@ P2P-связь и появятся друг у друга со статусом 
 
 В планах:
 
-- Переключатели шумоподавления и эхо, установщики.
+- Переключатели шумоподавления и эхо.
 
 ## Пресеты качества
 
@@ -116,6 +134,26 @@ P2P-связь и появятся друг у друга со статусом 
 `packets_lost` (накопительно), `loss_pct` (за интервал), `jitter_ms`, `rtt_ms`,
 `concealed_pct` (доля аудиосэмплов, замаскированных декодером). У отдачи потери,
 джиттер и RTT - из RTCP-отчёта получателя.
+
+## Выпуск релиза
+
+```bash
+./scripts/release.sh build 0.3.0             # сборки в dist/0.3.0
+./scripts/release.sh publish 0.3.0 notes.md  # релиз v0.3.0 из этих сборок
+```
+
+`build` собирает из закоммиченного кода zip и dmg для macOS (Apple Silicon и
+Intel) и zip для Windows в `dist/ВЕРСИЯ`. Между шагами сборки проверяются руками,
+`publish` выкладывает ровно их (коммит должен быть запушен) с описанием из
+`notes.md`. Установщик Windows после публикации собирает workflow
+[windows-installer](.github/workflows/windows-installer.yml) (Inno Setup,
+[installer/windows/sertasram.iss](installer/windows/sertasram.iss)): он же ставит
+его тихо, запускает приложение, удаляет и прикладывает `setup.exe` к релизу.
+Нативные DLL берутся из последнего успешного прогона `windows-capture`; его
+артефакты живут 90 дней, после этого прогон нужно повторить
+(`gh workflow run windows-capture.yml`).
+
+Список ручных проверок перед релизом - [docs/checklist.md](docs/checklist.md).
 
 ## Заметки по реализации
 

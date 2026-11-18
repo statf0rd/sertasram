@@ -5,10 +5,16 @@
 #
 #   SERTAS_SERVER='ws://...' SERTAS_TURN='turn:...' ./scripts/package-macos.sh
 #   -> ~/Desktop/sertasram-macos.zip  (внутри sertasram.app)
-#   ARCH=x86_64 ... ./scripts/package-macos.sh -> ~/Desktop/sertasram-macos-intel.zip
+#   -> ~/Desktop/sertasram-macos.dmg  (sertasram.app + ярлык «Программы»)
+#   ARCH=x86_64 ... ./scripts/package-macos.sh -> ~/Desktop/sertasram-macos-intel.{zip,dmg}
+# VERSION=0.3.0 - версия в Info.plist (по умолчанию из последнего тега git).
+# DMG_OUT - куда положить .dmg (по умолчанию рядом с zip).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+VERSION="${VERSION:-$(git -C "$ROOT" describe --tags --abbrev=0 2>/dev/null || echo 0.0.0)}"
+VERSION="${VERSION#v}"
+PLIST_VERSION="${VERSION%%-*}"   # Info.plist принимает только числа через точку
 ARCH="${ARCH:-aarch64}"
 case "$ARCH" in
   aarch64) JFX_CLS=mac-aarch64; JRE_ARCH=aarch64; SUFFIX="";        DYLIB_DIR="$ROOT/media-engine/build/native" ;;
@@ -65,8 +71,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>sertasram</string>
   <key>CFBundleDisplayName</key><string>sertasram</string>
   <key>CFBundleIdentifier</key><string>dev.sertas.app</string>
-  <key>CFBundleVersion</key><string>1.0</string>
-  <key>CFBundleShortVersionString</key><string>1.0</string>
+  <key>CFBundleVersion</key><string>$PLIST_VERSION</string>
+  <key>CFBundleShortVersionString</key><string>$PLIST_VERSION</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>sertasram</string>
   <key>NSMicrophoneUsageDescription</key><string>Голосовая связь в звонке</string>
@@ -108,6 +114,34 @@ cp "$ROOT/THIRD-PARTY-NOTICES.txt" "$RES/THIRD-PARTY-NOTICES.txt"
 rm -f "$OUT"
 ( cd "$STAGE" && zip -q -r -y "$OUT" sertasram.app )
 echo "done -> $OUT ($(du -h "$OUT" | cut -f1))"
+
+# Образ диска: приложение, ярлык «Программы» для перетаскивания и инструкция.
+# Бандл не подписан, поэтому без xattr macOS скажет, что приложение повреждено.
+DMG_OUT="${DMG_OUT:-${OUT%.zip}.dmg}"
+DMG_STAGE="$STAGE-dmg"
+rm -rf "$DMG_STAGE"; mkdir -p "$DMG_STAGE"
+ditto "$APP" "$DMG_STAGE/sertasram.app"
+ln -s /Applications "$DMG_STAGE/Applications"
+cat > "$DMG_STAGE/Как открыть.txt" <<TXT
+sertasram $VERSION
+
+1. Перетащите sertasram в папку Applications (Программы).
+   При обновлении замените старый sertasram.app: если он лежит там же,
+   разрешения на запись экрана и микрофон сохранятся.
+
+2. Приложение не подписано, поэтому один раз выполните в Терминале:
+
+   xattr -cr /Applications/sertasram.app
+
+3. Откройте sertasram из Программ. Разрешите микрофон, камеру (когда
+   включите её) и запись экрана (для демонстрации).
+
+Лог приложения: ~/Library/Logs/sertasram.log
+TXT
+rm -f "$DMG_OUT"
+hdiutil create -quiet -volname "sertasram" -srcfolder "$DMG_STAGE" -fs HFS+ -format UDZO -ov "$DMG_OUT"
+rm -rf "$DMG_STAGE"
+echo "done -> $DMG_OUT ($(du -h "$DMG_OUT" | cut -f1))"
 echo "ВАЖНО: при обновлении удалите старый sertasram.app и распакуйте архив на его место."
 echo "Иначе Finder создаст копию «sertasram 2.app», а разрешение Screen Recording выдано"
 echo "старому пути — macOS попросит доступ заново (бандл не подписан, TCC различает копии)."
