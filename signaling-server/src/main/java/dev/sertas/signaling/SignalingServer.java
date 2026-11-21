@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * WebSocket-обёртка над {@link SignalingService}. Сопоставляет id соединения
@@ -22,6 +23,13 @@ public final class SignalingServer {
     private final SignalCodec codec = new SignalCodec();
     private final Map<String, WsContext> conns = new ConcurrentHashMap<>();
     private Javalin app;
+
+    // Счётчики для служебной страницы /metrics (формат Prometheus).
+    private final long startedAtMillis = System.currentTimeMillis();
+    private final AtomicLong connectionsTotal = new AtomicLong();
+    private final AtomicLong rejectedTotal = new AtomicLong();
+    private final AtomicLong joinsTotal = new AtomicLong();
+    private final AtomicLong messagesTotal = new AtomicLong();
 
     /**
      * Если задан — подключения без совпадающего {@code ?token=} отклоняются.
@@ -37,9 +45,16 @@ public final class SignalingServer {
     }
 
     public void start(int port) {
-        app = Javalin.create().ws("/signal", ws -> {
+        // Javalin 7: маршруты объявляются в конфигурации, до старта сервера.
+        app = Javalin.create(config -> {
+            // Служебные страницы: /health для проверок после деплоя и HEALTHCHECK
+            // контейнера, /metrics для Prometheus. Секретов и имён комнат не отдают.
+            config.routes.get("/health", ctx -> ctx.result("ok"));
+            config.routes.get("/metrics", ctx -> ctx.contentType("text/plain; version=0.0.4; charset=utf-8").result(metrics()));
+            config.routes.ws("/signal", ws -> {
             ws.onConnect(ctx -> {
                 if (requiredToken != null && !requiredToken.equals(ctx.queryParam("token"))) {
+                    rejectedTotal.incrementAndGet();
                     System.out.println("REJECT(token) " + ctx.sessionId());
                     ctx.closeSession(1008, "unauthorized"); // 1008 = policy violation
                     return;
@@ -48,11 +63,14 @@ public final class SignalingServer {
                 // часто рвут «тихие» TCP за ~10с (иначе клиент молча отваливается).
                 ctx.enableAutomaticPings(5, TimeUnit.SECONDS);
                 conns.put(ctx.sessionId(), ctx);
+                connectionsTotal.incrementAndGet();
                 System.out.println("CONNECT " + ctx.sessionId());
             });
             ws.onMessage(ctx -> {
                 SignalMessage msg = codec.decode(ctx.message());
+                messagesTotal.incrementAndGet();
                 if (msg instanceof SignalMessage.Join j) {
+                    joinsTotal.incrementAndGet();
                     System.out.println("JOIN " + ctx.sessionId()
                             + " room=[" + j.room() + "] len=" + j.room().length()
                             + " name=[" + j.name() + "]");
@@ -64,7 +82,31 @@ public final class SignalingServer {
                 dispatch(service.onDisconnect(ctx.sessionId()));
                 conns.remove(ctx.sessionId());
             });
+            });
         }).start(port);
+    }
+
+    /** Метрики в текстовом формате Prometheus (без внешних библиотек). */
+    private String metrics() {
+        Runtime rt = Runtime.getRuntime();
+        StringBuilder sb = new StringBuilder();
+        metric(sb, "sertas_connections_active", "gauge", "Открытые WebSocket-соединения", conns.size());
+        metric(sb, "sertas_connections_total", "counter", "Принятые соединения с момента старта", connectionsTotal.get());
+        metric(sb, "sertas_rejected_total", "counter", "Соединения, отклонённые из-за неверного токена", rejectedTotal.get());
+        metric(sb, "sertas_joins_total", "counter", "Входы в комнаты", joinsTotal.get());
+        metric(sb, "sertas_messages_total", "counter", "Принятые сигнальные сообщения", messagesTotal.get());
+        metric(sb, "sertas_uptime_seconds", "gauge", "Время работы сервера",
+                (System.currentTimeMillis() - startedAtMillis) / 1000);
+        metric(sb, "sertas_jvm_memory_used_bytes", "gauge", "Занятая память кучи JVM",
+                rt.totalMemory() - rt.freeMemory());
+        metric(sb, "sertas_jvm_memory_max_bytes", "gauge", "Предел кучи JVM", rt.maxMemory());
+        return sb.toString();
+    }
+
+    private static void metric(StringBuilder sb, String name, String type, String help, long value) {
+        sb.append("# HELP ").append(name).append(' ').append(help).append('\n');
+        sb.append("# TYPE ").append(name).append(' ').append(type).append('\n');
+        sb.append(name).append(' ').append(value).append('\n');
     }
 
     private void dispatch(List<Outbound> outs) {

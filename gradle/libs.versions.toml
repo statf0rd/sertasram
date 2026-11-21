@@ -1,6 +1,6 @@
 [versions]
-jackson = "2.17.2"
-javalin = "6.3.0"
+jackson = "2.18.11"
+javalin = "7.2.4"
 slf4j = "2.0.13"
 
 [libraries]
