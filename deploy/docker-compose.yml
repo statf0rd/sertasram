@@ -56,6 +56,10 @@ services:
     image: coturn/coturn:4.6-alpine
     # TURN ретранслирует UDP на диапазоне портов, поэтому сеть хоста.
     network_mode: host
+    # У бинарника turnserver в образе есть файловая capability net_bind_service;
+    # без неё в ограничивающем наборе запуск завершается "Operation not permitted".
+    cap_add:
+      - NET_BIND_SERVICE
     command:
       - --listening-port=3478
       - --fingerprint
