@@ -1,0 +1,23 @@
+# Надстройка для запуска на ноутбуке: без домена, HTTPS и TURN.
+# docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+services:
+  signaling:
+    image: ${SIGNALING_IMAGE:-sertas-signaling:local}
+    environment:
+      SERTAS_TURN: ""
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  caddy:
+    profiles: [server-only]
+
+  turn:
+    profiles: [server-only]
+
+  prometheus:
+    ports:
+      - "127.0.0.1:9090:9090"
+
+  alertmanager:
+    ports:
+      - "127.0.0.1:9093:9093"

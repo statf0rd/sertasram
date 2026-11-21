@@ -1,0 +1,10 @@
+# Надстройка для сервера, где порты 80 и 443 уже заняты другими сервисами.
+# Свой Caddy не запускается; сигналинг публикуется на отдельном порту.
+# Включается строкой в .env:  COMPOSE_FILE=docker-compose.yml:docker-compose.shared.yml
+services:
+  signaling:
+    ports:
+      - "${SIGNALING_BIND:-0.0.0.0}:${SIGNALING_PORT:-8090}:8080"
+
+  caddy:
+    profiles: [own-proxy]

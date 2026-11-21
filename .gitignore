@@ -40,3 +40,8 @@ dist/
 # Logs / local
 *.log
 local.properties
+
+# Deploy secrets and state
+deploy/.env
+deploy/.release/
+deploy/alertmanager/telegram_token

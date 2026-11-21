@@ -1,0 +1,35 @@
+groups:
+  - name: sertas
+    rules:
+      - alert: SignalingDown
+        expr: up{job="signaling"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Сигналинг-сервер не отвечает"
+          description: "Prometheus не может получить /metrics с signaling:8080 уже минуту."
+
+      - alert: SignalingRestarted
+        expr: sertas_uptime_seconds < 120 and sertas_uptime_seconds offset 5m > 120
+        labels:
+          severity: warning
+        annotations:
+          summary: "Сигналинг-сервер перезапустился"
+          description: "Время работы сбросилось - контейнер был перезапущен вне деплоя или упал."
+
+      - alert: SignalingMemoryHigh
+        expr: sertas_jvm_memory_used_bytes / sertas_jvm_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Куча JVM заполнена больше чем на 90%"
+
+      - alert: SignalingTokenRejects
+        expr: increase(sertas_rejected_total[5m]) > 20
+        labels:
+          severity: warning
+        annotations:
+          summary: "Много подключений с неверным токеном"
+          description: "Больше 20 отклонённых подключений за 5 минут - возможен перебор токена."

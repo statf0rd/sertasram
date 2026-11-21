@@ -1,0 +1,123 @@
+# Серверная часть sertasram в контейнерах: сигналинг, TURN, HTTPS-прокси, мониторинг.
+# Запуск:  cp .env.example .env  (заполнить)  &&  docker compose up -d
+# Локально без домена и TURN:  docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+name: sertas
+
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  signaling:
+    <<: *hardening
+    image: ${SIGNALING_IMAGE:-ghcr.io/statf0rd/sertasram-signaling:latest}
+    environment:
+      SERTAS_TOKEN: ${SERTAS_TOKEN:?задайте SERTAS_TOKEN в .env}
+      SERTAS_TURN: turn:${PUBLIC_IP}:3478,sertas,${TURN_PASSWORD}
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 384m
+    cpus: 1.0
+    pids_limit: 256
+    networks: [edge, monitoring]
+    # Наружу порт не публикуется: клиенты ходят через Caddy (wss), Prometheus - по внутренней сети.
+
+  caddy:
+    <<: *hardening
+    image: caddy:2.8-alpine
+    cap_add:
+      - NET_BIND_SERVICE
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 128m
+    networks: [edge]
+    depends_on:
+      signaling:
+        condition: service_healthy
+
+  turn:
+    <<: *hardening
+    image: coturn/coturn:4.6-alpine
+    # TURN ретранслирует UDP на диапазоне портов, поэтому сеть хоста.
+    network_mode: host
+    command:
+      - --listening-port=3478
+      - --fingerprint
+      - --lt-cred-mech
+      - --user=sertas:${TURN_PASSWORD}
+      - --realm=sertas
+      - --external-ip=${PUBLIC_IP}
+      - --min-port=49160
+      - --max-port=49200
+      - --no-tls
+      - --no-dtls
+      - --no-cli
+      - --log-file=stdout
+    mem_limit: 128m
+
+  prometheus:
+    <<: *hardening
+    image: prom/prometheus:v2.54.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    mem_limit: 256m
+    networks: [monitoring]
+
+  alertmanager:
+    <<: *hardening
+    image: prom/alertmanager:v0.27.0
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/telegram_token:/etc/alertmanager/telegram_token:ro
+    mem_limit: 64m
+    networks: [monitoring]
+
+  grafana:
+    <<: *hardening
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?задайте GRAFANA_PASSWORD в .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    # Панель доступна только с самого сервера; смотреть через ssh -L 3000:127.0.0.1:3000.
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    mem_limit: 256m
+    networks: [monitoring]
+
+networks:
+  edge:
+  monitoring:
+
+volumes:
+  caddy_data:
+  caddy_config:
+  prometheus_data:
+  grafana_data:
