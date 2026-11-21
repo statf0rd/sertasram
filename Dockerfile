@@ -3,7 +3,9 @@
 # Запуск:  docker run --rm -p 8080:8080 -e SERTAS_TOKEN=... sertas-signaling
 
 # --- Этап 1: сборка дистрибутива на JDK 21 ---
-FROM eclipse-temurin:21-jdk-jammy AS build
+# Сборка идёт на платформе runner-а: байткод от архитектуры не зависит,
+# под целевую платформу (amd64 или arm64) собирается только этап запуска.
+FROM --platform=$BUILDPLATFORM eclipse-temurin:21-jdk-jammy AS build
 WORKDIR /src
 
 # Сначала только файлы сборки: слой с зависимостями кешируется, пока они не менялись.

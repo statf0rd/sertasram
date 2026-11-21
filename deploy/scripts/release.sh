@@ -7,12 +7,13 @@
 #   release.sh status            что сейчас запущено
 #
 # Запускается из каталога deploy (рядом docker-compose.yml и .env).
-# COMPOSE_ARGS позволяет добавить надстройку, например для ноутбука:
+# Набор compose-файлов берётся из COMPOSE_FILE в .env (по умолчанию docker-compose.yml).
+# COMPOSE_ARGS позволяет задать его разово, например для ноутбука:
 #   COMPOSE_ARGS="-f docker-compose.yml -f docker-compose.local.yml" ./scripts/release.sh promote sertas-signaling:local
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-COMPOSE_ARGS=${COMPOSE_ARGS:--f docker-compose.yml}
+COMPOSE_ARGS=${COMPOSE_ARGS:-}
 STAGING_NAME=sertas-signaling-staging
 STAGING_PORT=${STAGING_PORT:-18080}
 STATE_DIR=.release

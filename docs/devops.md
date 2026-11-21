@@ -9,6 +9,7 @@
 | `Dockerfile` | образ сигналинг-сервера: сборка на JDK 21, запуск на JRE 21 (Alpine) от непривилегированного пользователя |
 | `deploy/docker-compose.yml` | сервер целиком: `signaling`, `caddy` (HTTPS), `turn` (coturn), `prometheus`, `alertmanager`, `grafana` |
 | `deploy/docker-compose.local.yml` | надстройка для ноутбука: без домена и TURN, порты на 127.0.0.1 |
+| `deploy/docker-compose.shared.yml` | надстройка для сервера с занятыми 80/443: без Caddy, сигналинг на отдельном порту |
 | `deploy/scripts/release.sh` | выкладка на машине с Docker: `staging`, `promote`, `rollback`, `status` |
 | `deploy/scripts/docker-bench.sh` | проверка хоста по CIS Docker Benchmark |
 | `.github/workflows/ci.yml` | тесты, сборка образа и запуск в контейнере, Trivy |
@@ -43,6 +44,17 @@ docker compose up -d
 ```
 
 Открыть в фаерволе: 80, 443 (Caddy), 18080 (проверочный контейнер), 3478 tcp/udp и 49160-49200/udp (TURN).
+
+## Сервер с занятыми портами 80 и 443
+
+Если на машине уже работают другие сервисы (свой прокси, VPN), в `.env` добавляются две строки:
+
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.shared.yml
+SIGNALING_PORT=8090
+```
+
+Надстройка `docker-compose.shared.yml` не запускает Caddy и публикует сигналинг на `SIGNALING_PORT`. Клиент подключается по `ws://HOST:8090/signal?token=...`; чтобы получить `wss`, на существующем прокси добавляется `reverse_proxy 127.0.0.1:8090` и в `.env` ставится `SIGNALING_BIND=127.0.0.1`. В фаерволе открываются `SIGNALING_PORT`, 18080, 3478 tcp/udp и 49160-49200/udp.
 
 ## Локальный запуск
 
