@@ -1,0 +1,9 @@
+# HTTPS с сертификатом Let's Encrypt и прокси на сигналинг.
+# Клиент подключается по wss://{$DOMAIN}/signal?token=...
+{$DOMAIN} {
+	encode gzip
+	# Служебные страницы наружу не отдаём: метрики читает Prometheus по внутренней сети.
+	@internal path /metrics
+	respond @internal 404
+	reverse_proxy signaling:8080
+}

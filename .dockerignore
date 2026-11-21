@@ -1,0 +1,15 @@
+.git
+.github
+.gradle
+.idea
+**/build
+build
+docs
+deploy
+scripts
+native-capture
+app-client
+media
+media-engine
+*.md
+.DS_Store
