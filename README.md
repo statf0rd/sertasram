@@ -1,4 +1,4 @@
-# sertasram
+# stars
 
 Кроссплатформенное десктоп-приложение для голосовых и видео-звонков с
 демонстрацией экрана — аналог Discord. До 4 участников в P2P-меше на WebRTC.
@@ -10,7 +10,8 @@
 [план Фазы 0](docs/superpowers/plans/2026-06-24-phase-0-signaling-and-foundations.md),
 [деплой сервера](DEPLOY.md).
 
-> Проект переименован из `sertas` в `sertasram`. Внутренние имена намеренно
+> Проект переименован из `sertas` в `stars` (релизы v0.2.0 и v0.3.0 выходили
+> под промежуточным названием `sertasram`). Внутренние имена намеренно
 > оставлены прежними, чтобы не ломать совместимость: Java-пакеты `dev.sertas.*`
 > (на них завязаны JNI-символы нативных библиотек), bundle id `dev.sertas.app`,
 > системные свойства `-Dsertas.*`, переменные `SERTAS_*`, каталог `~/.sertas/`,
@@ -35,18 +36,18 @@ Gradle не нужно).
 
 ## Установка
 
-Готовые сборки - в [релизах](https://github.com/statf0rd/sertasram/releases), Java
+Готовые сборки - в [релизах](https://github.com/statf0rd/stars/releases), Java
 уже внутри.
 
-- **Windows:** `sertasram-windows-x64-setup.exe` ставит приложение для текущего
-  пользователя, без прав администратора, в `%LOCALAPPDATA%\Programs\sertasram`,
+- **Windows:** `stars-windows-x64-setup.exe` ставит приложение для текущего
+  пользователя, без прав администратора, в `%LOCALAPPDATA%\Programs\stars`,
   с ярлыком в меню «Пуск». Если SmartScreen блокирует запуск: «Подробнее» -
-  «Выполнить в любом случае». Лог - `%LOCALAPPDATA%\sertasram\sertasram.log`.
-  Без установки - `sertasram-windows-x64.zip` и `Запустить sertasram.bat`.
-- **macOS:** `sertasram-macos-arm64.dmg` (Apple Silicon) или
-  `sertasram-macos-x64.dmg` (Intel). Перетащить `sertasram` в «Программы» и один
-  раз снять карантин: `xattr -cr /Applications/sertasram.app`. Лог -
-  `~/Library/Logs/sertasram.log`.
+  «Выполнить в любом случае». Лог - `%LOCALAPPDATA%\stars\stars.log`.
+  Без установки - `stars-windows-x64.zip` и `Запустить stars.bat`.
+- **macOS:** `stars-macos-arm64.dmg` (Apple Silicon) или
+  `stars-macos-x64.dmg` (Intel). Перетащить `stars` в «Программы» и один
+  раз снять карантин: `xattr -cr /Applications/stars.app`. Лог -
+  `~/Library/Logs/stars.log`.
 
 Сборки не подписаны, отсюда предупреждения при первом запуске. Адрес сервера в
 них не вшит: адрес с токеном вводится в поле «Сервер» и запоминается.
@@ -147,7 +148,7 @@ Intel) и zip для Windows в `dist/ВЕРСИЯ`. Между шагами с�
 `publish` выкладывает ровно их (коммит должен быть запушен) с описанием из
 `notes.md`. Установщик Windows после публикации собирает workflow
 [windows-installer](.github/workflows/windows-installer.yml) (Inno Setup,
-[installer/windows/sertasram.iss](installer/windows/sertasram.iss)): он же ставит
+[installer/windows/stars.iss](installer/windows/stars.iss)): он же ставит
 его тихо, запускает приложение, удаляет и прикладывает `setup.exe` к релизу.
 Нативные DLL берутся из последнего успешного прогона `windows-capture`; его
 артефакты живут 90 дней, после этого прогон нужно повторить

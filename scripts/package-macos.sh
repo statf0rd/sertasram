@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Собирает sertasram.app для macOS с вложенной JRE и нативными библиотеками.
+# Собирает stars.app для macOS с вложенной JRE и нативными библиотеками.
 # По умолчанию Apple Silicon (arm64); ARCH=x86_64 — Intel (кросс-сборка с
 # Apple Silicon). Адрес сервера/TURN берутся из env (не хардкод в репозитории).
 #
 #   SERTAS_SERVER='ws://...' SERTAS_TURN='turn:...' ./scripts/package-macos.sh
-#   -> ~/Desktop/sertasram-macos.zip  (внутри sertasram.app)
-#   -> ~/Desktop/sertasram-macos.dmg  (sertasram.app + ярлык «Программы»)
-#   ARCH=x86_64 ... ./scripts/package-macos.sh -> ~/Desktop/sertasram-macos-intel.{zip,dmg}
+#   -> ~/Desktop/stars-macos.zip  (внутри stars.app)
+#   -> ~/Desktop/stars-macos.dmg  (stars.app + ярлык «Программы»)
+#   ARCH=x86_64 ... ./scripts/package-macos.sh -> ~/Desktop/stars-macos-intel.{zip,dmg}
 # VERSION=0.3.0 - версия в Info.plist (по умолчанию из последнего тега git).
 # DMG_OUT - куда положить .dmg (по умолчанию рядом с zip).
 set -euo pipefail
@@ -21,8 +21,8 @@ case "$ARCH" in
   x86_64)  JFX_CLS=mac;         JRE_ARCH=x64;     SUFFIX="-intel";  DYLIB_DIR="$ROOT/media-engine/build/native/x86_64" ;;
   *) echo "ARCH должен быть aarch64 или x86_64"; exit 1 ;;
 esac
-STAGE=/tmp/sertasram-macos$SUFFIX
-OUT="${OUT:-$HOME/Desktop/sertasram-macos$SUFFIX.zip}"
+STAGE=/tmp/stars-macos$SUFFIX
+OUT="${OUT:-$HOME/Desktop/stars-macos$SUFFIX.zip}"
 JFX=21.0.4
 WEBRTC=0.14.0
 JACKSON=2.17.2
@@ -33,7 +33,7 @@ TURN_SPEC="${SERTAS_TURN:-}"
 echo "[1/5] building module jars"
 "$ROOT/gradlew" -p "$ROOT" :app-client:jar :media-engine:jar :media:jar :signaling-client:jar :protocol:jar -q
 
-APP="$STAGE/sertasram.app"
+APP="$STAGE/stars.app"
 RES="$APP/Contents/Resources"
 echo "[2/5] app skeleton + lib/"
 rm -rf "$STAGE"; mkdir -p "$APP/Contents/MacOS" "$RES/lib" "$RES/jre"
@@ -68,13 +68,13 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>sertasram</string>
-  <key>CFBundleDisplayName</key><string>sertasram</string>
+  <key>CFBundleName</key><string>stars</string>
+  <key>CFBundleDisplayName</key><string>stars</string>
   <key>CFBundleIdentifier</key><string>dev.sertas.app</string>
   <key>CFBundleVersion</key><string>$PLIST_VERSION</string>
   <key>CFBundleShortVersionString</key><string>$PLIST_VERSION</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleExecutable</key><string>sertasram</string>
+  <key>CFBundleExecutable</key><string>stars</string>
   <key>NSMicrophoneUsageDescription</key><string>Голосовая связь в звонке</string>
   <key>NSCameraUsageDescription</key><string>Видео с камеры в звонке</string>
   <key>NSHighResolutionCapable</key><true/>
@@ -92,10 +92,10 @@ TURN_ARG=""
 # создаёт ни audioEngine (отдача), ни demoPlayer (приём) — звук демо
 # не работает в обе стороны (зеркально package-windows.sh).
 DEMOAUDIO="${SERTAS_DEMOAUDIO:-on}"
-cat > "$APP/Contents/MacOS/sertasram" <<LAUNCH
+cat > "$APP/Contents/MacOS/stars" <<LAUNCH
 #!/bin/bash
 HERE="\$(cd "\$(dirname "\$0")/../Resources" && pwd)"
-LOG="\$HOME/Library/Logs/sertasram.log"   # лог приложения (предыдущий запуск -> sertasram.log.prev)
+LOG="\$HOME/Library/Logs/stars.log"   # лог приложения (предыдущий запуск -> stars.log.prev)
 mkdir -p "\$(dirname "\$LOG")"; [ -f "\$LOG" ] && mv -f "\$LOG" "\$LOG.prev"
 exec "\$HERE/jre/Contents/Home/bin/java" \\
   -Dsertas.server="$SERVER_URL" \\
@@ -103,16 +103,16 @@ exec "\$HERE/jre/Contents/Home/bin/java" \\
   -Dsertas.demoaudio=$DEMOAUDIO$TURN_ARG \\
   -cp "\$HERE/lib/*" dev.sertas.app.Launcher >>"\$LOG" 2>&1
 LAUNCH
-chmod +x "$APP/Contents/MacOS/sertasram"
+chmod +x "$APP/Contents/MacOS/stars"
 chmod +x "$RES/jre/Contents/Home/bin/java" 2>/dev/null || true
-# Лицензия sertasram и уведомления о сторонних компонентах (их требуют
+# Лицензия stars и уведомления о сторонних компонентах (их требуют
 # лицензии webrtc-java/libwebrtc/JavaFX и др.). Кладём внутрь .app, а не
-# рядом: архив должен распаковываться ровно в sertasram.app (путь важен для TCC).
+# рядом: архив должен распаковываться ровно в stars.app (путь важен для TCC).
 cp "$ROOT/LICENSE" "$RES/LICENSE.txt"
 cp "$ROOT/THIRD-PARTY-NOTICES.txt" "$RES/THIRD-PARTY-NOTICES.txt"
 
 rm -f "$OUT"
-( cd "$STAGE" && zip -q -r -y "$OUT" sertasram.app )
+( cd "$STAGE" && zip -q -r -y "$OUT" stars.app )
 echo "done -> $OUT ($(du -h "$OUT" | cut -f1))"
 
 # Образ диска: приложение, ярлык «Программы» для перетаскивания и инструкция.
@@ -120,29 +120,29 @@ echo "done -> $OUT ($(du -h "$OUT" | cut -f1))"
 DMG_OUT="${DMG_OUT:-${OUT%.zip}.dmg}"
 DMG_STAGE="$STAGE-dmg"
 rm -rf "$DMG_STAGE"; mkdir -p "$DMG_STAGE"
-ditto "$APP" "$DMG_STAGE/sertasram.app"
+ditto "$APP" "$DMG_STAGE/stars.app"
 ln -s /Applications "$DMG_STAGE/Applications"
 cat > "$DMG_STAGE/Как открыть.txt" <<TXT
-sertasram $VERSION
+stars $VERSION
 
-1. Перетащите sertasram в папку Applications (Программы).
-   При обновлении замените старый sertasram.app: если он лежит там же,
+1. Перетащите stars в папку Applications (Программы).
+   При обновлении замените старый stars.app: если он лежит там же,
    разрешения на запись экрана и микрофон сохранятся.
 
 2. Приложение не подписано, поэтому один раз выполните в Терминале:
 
-   xattr -cr /Applications/sertasram.app
+   xattr -cr /Applications/stars.app
 
-3. Откройте sertasram из Программ. Разрешите микрофон, камеру (когда
+3. Откройте stars из Программ. Разрешите микрофон, камеру (когда
    включите её) и запись экрана (для демонстрации).
 
-Лог приложения: ~/Library/Logs/sertasram.log
+Лог приложения: ~/Library/Logs/stars.log
 TXT
 rm -f "$DMG_OUT"
-hdiutil create -quiet -volname "sertasram" -srcfolder "$DMG_STAGE" -fs HFS+ -format UDZO -ov "$DMG_OUT"
+hdiutil create -quiet -volname "stars" -srcfolder "$DMG_STAGE" -fs HFS+ -format UDZO -ov "$DMG_OUT"
 rm -rf "$DMG_STAGE"
 echo "done -> $DMG_OUT ($(du -h "$DMG_OUT" | cut -f1))"
-echo "ВАЖНО: при обновлении удалите старый sertasram.app и распакуйте архив на его место."
-echo "Иначе Finder создаст копию «sertasram 2.app», а разрешение Screen Recording выдано"
+echo "ВАЖНО: при обновлении удалите старый stars.app и распакуйте архив на его место."
+echo "Иначе Finder создаст копию «stars 2.app», а разрешение Screen Recording выдано"
 echo "старому пути — macOS попросит доступ заново (бандл не подписан, TCC различает копии)."
 echo "Переход со старого sertas.app: удалите его — после переименования доступ к записи экрана нужно выдать один раз заново."

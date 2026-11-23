@@ -14,7 +14,7 @@ class LauncherLogTest {
 
     @Test
     void createsMissingDirectories(@TempDir Path dir) throws Exception {
-        Path log = dir.resolve("a").resolve("b").resolve("sertasram.log");
+        Path log = dir.resolve("a").resolve("b").resolve("stars.log");
 
         try (PrintStream out = Launcher.openLog(log)) {
             out.println("старт");
@@ -25,7 +25,7 @@ class LauncherLogTest {
 
     @Test
     void previousRunMovesToPrev(@TempDir Path dir) throws Exception {
-        Path log = dir.resolve("sertasram.log");
+        Path log = dir.resolve("stars.log");
         Files.writeString(log, "прошлый запуск");
 
         try (PrintStream out = Launcher.openLog(log)) {
@@ -33,6 +33,6 @@ class LauncherLogTest {
         }
 
         assertEquals("новый запуск", Files.readString(log, StandardCharsets.UTF_8));
-        assertEquals("прошлый запуск", Files.readString(dir.resolve("sertasram.log.prev"), StandardCharsets.UTF_8));
+        assertEquals("прошлый запуск", Files.readString(dir.resolve("stars.log.prev"), StandardCharsets.UTF_8));
     }
 }
