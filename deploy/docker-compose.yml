@@ -91,8 +91,16 @@ services:
   alertmanager:
     <<: *hardening
     image: prom/alertmanager:v0.27.0
+    # chat_id не хранится в репозитории: он подставляется в конфигурацию из TELEGRAM_CHAT_ID при запуске.
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      - --config.file=/etc/alertmanager/alertmanager.yml
+      - >-
+        sed "s/__TELEGRAM_CHAT_ID__/$${TELEGRAM_CHAT_ID}/" /etc/alertmanager/alertmanager.yml > /tmp/alertmanager.yml
+        && exec /bin/alertmanager --config.file=/tmp/alertmanager.yml
+    environment:
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-1}
+    tmpfs:
+      - /tmp
     volumes:
       - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - ./alertmanager/telegram_token:/etc/alertmanager/telegram_token:ro
