@@ -31,6 +31,8 @@ jobs:
           java-version: '21'
 
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          add-job-summary: never
 
       # Модули без нативного кода: протокол, клиент и сервер сигналинга, медиа-утилиты.
       # Модули с нативными библиотеками (media-engine, app-client) тестируются на машине разработчика.
@@ -71,6 +73,8 @@ jobs:
 
       - name: Сборка образа
         uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_SUMMARY: false
         with:
           context: .
           load: true
@@ -97,6 +101,8 @@ jobs:
           java-version: '21'
 
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          add-job-summary: never
 
       - name: Проба - два клиента видят друг друга через сервер в контейнере
         env:
