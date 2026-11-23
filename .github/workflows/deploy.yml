@@ -53,6 +53,8 @@ jobs:
 
       # Образ помечается номером коммита: по нему видно, что запущено, и к нему можно откатиться.
       - uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_SUMMARY: false
         with:
           context: .
           push: true
@@ -103,6 +105,8 @@ jobs:
           java-version: '21'
 
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          add-job-summary: never
 
       - name: Проба снаружи - сервер принимает подключения
         env:
