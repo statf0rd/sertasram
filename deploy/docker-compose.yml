@@ -1,4 +1,4 @@
-# Серверная часть sertasram в контейнерах: сигналинг, TURN, HTTPS-прокси, мониторинг.
+# Серверная часть stars в контейнерах: сигналинг, TURN, HTTPS-прокси, мониторинг.
 # Запуск:  cp .env.example .env  (заполнить)  &&  docker compose up -d
 # Локально без домена и TURN:  docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
 name: sertas
@@ -18,7 +18,7 @@ x-hardening: &hardening
 services:
   signaling:
     <<: *hardening
-    image: ${SIGNALING_IMAGE:-ghcr.io/statf0rd/sertasram-signaling:latest}
+    image: ${SIGNALING_IMAGE:-ghcr.io/statf0rd/stars-signaling:latest}
     environment:
       SERTAS_TOKEN: ${SERTAS_TOKEN:?задайте SERTAS_TOKEN в .env}
       SERTAS_TURN: turn:${PUBLIC_IP}:3478,sertas,${TURN_PASSWORD}

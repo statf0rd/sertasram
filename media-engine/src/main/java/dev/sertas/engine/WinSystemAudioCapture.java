@@ -39,7 +39,7 @@ public final class WinSystemAudioCapture implements SystemAudioProvider {
             System.err.println("[demo] WASAPI dll loaded=" + abs);
             return true;
         } catch (UnsatisfiedLinkError e) {
-            System.err.println("sertasram: не удалось загрузить " + path + ": " + e.getMessage());
+            System.err.println("stars: не удалось загрузить " + path + ": " + e.getMessage());
             return false;
         }
     }

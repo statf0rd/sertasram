@@ -1,23 +1,23 @@
-sertasram — THIRD-PARTY NOTICES / УВЕДОМЛЕНИЯ О СТОРОННИХ КОМПОНЕНТАХ
+stars — THIRD-PARTY NOTICES / УВЕДОМЛЕНИЯ О СТОРОННИХ КОМПОНЕНТАХ
 =======================================================================
 
-Сборки sertasram (sertasram-win.zip, sertasram-macos.zip,
-sertasram-macos-intel.zip) содержат сторонние компоненты, перечисленные ниже.
+Сборки stars (stars-win.zip, stars-macos.zip,
+stars-macos-intel.zip) содержат сторонние компоненты, перечисленные ниже.
 Каждый из них распространяется на условиях собственной лицензии. Лицензия
-sertasram (файл LICENSE) на эти компоненты не распространяется и не
+stars (файл LICENSE) на эти компоненты не распространяется и не
 ограничивает права, которые дают их лицензии.
 
 Нативные библиотеки sertas_capture.dll, sertas_audio.dll и
-libsertas_audio.dylib — часть sertasram, на них действует LICENSE.
+libsertas_audio.dylib — часть stars, на них действует LICENSE.
 
-The sertasram builds (sertasram-win.zip, sertasram-macos.zip,
-sertasram-macos-intel.zip) include the third-party components listed below.
-Each component is distributed under its own license. The sertasram license
+The stars builds (stars-win.zip, stars-macos.zip,
+stars-macos-intel.zip) include the third-party components listed below.
+Each component is distributed under its own license. The stars license
 (LICENSE) does not apply to these components and does not limit the rights
 granted by their licenses.
 
 The native libraries sertas_capture.dll, sertas_audio.dll and
-libsertas_audio.dylib are part of sertasram and are covered by LICENSE.
+libsertas_audio.dylib are part of stars and are covered by LICENSE.
 
 Full license texts are reproduced in Part 4, referenced as [1], [2], ...
 
@@ -78,7 +78,7 @@ Eclipse Temurin 21 JRE (Adoptium project)
              further components are listed in the runtime's own notices
   Copyright: Copyright (c) Oracle and/or its affiliates and contributors
   Notices:   Windows: jre\legal\
-             macOS:   sertasram.app/Contents/Resources/jre/Contents/Home/legal/
+             macOS:   stars.app/Contents/Resources/jre/Contents/Home/legal/
   Source:    https://github.com/adoptium/jdk21u
 
 
@@ -163,7 +163,7 @@ FFmpeg
   with a modified version of FFmpeg.
   Written offer: for at least three years after you receive this build, you
   may request a copy of the corresponding FFmpeg source code from the
-  copyright holder of sertasram via https://github.com/statf0rd. It will be
+  copyright holder of stars via https://github.com/statf0rd. It will be
   provided free of charge.
 
 

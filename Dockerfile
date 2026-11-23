@@ -1,4 +1,4 @@
-# Образ сигналинг-сервера sertasram.
+# Образ сигналинг-сервера stars.
 # Сборка:  docker build -t sertas-signaling .
 # Запуск:  docker run --rm -p 8080:8080 -e SERTAS_TOKEN=... sertas-signaling
 

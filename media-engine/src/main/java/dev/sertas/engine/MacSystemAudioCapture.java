@@ -33,7 +33,7 @@ public final class MacSystemAudioCapture implements SystemAudioProvider {
             System.load(path);
             return true;
         } catch (UnsatisfiedLinkError e) {
-            System.err.println("sertasram: не удалось загрузить " + path + ": " + e.getMessage());
+            System.err.println("stars: не удалось загрузить " + path + ": " + e.getMessage());
             return false;
         }
     }

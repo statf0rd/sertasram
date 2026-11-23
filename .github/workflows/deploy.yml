@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE: ghcr.io/statf0rd/sertasram-signaling
+  IMAGE: ghcr.io/statf0rd/stars-signaling
 
 jobs:
   publish:
